@@ -34,7 +34,10 @@ yarn-error.*
 *.pem
 
 # Local env files
-.env*.local
+.env
+.env.*
+!.env.example
+my-env.txt
 
 # TypeScript
 *.tsbuildinfo
@@ -42,3 +45,6 @@ yarn-error.*
 # Generated native folders
 /ios
 /android
+
+# Local API response references may contain sample credentials
+/serpapi-services/

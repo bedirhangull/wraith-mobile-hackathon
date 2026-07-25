@@ -64,7 +64,7 @@ export default function PaywallScreen(): JSX.Element {
   }, []);
 
   const countdown = formatCountdown(secondsLeft);
-  const continueToProfile = (): void => router.replace("/profile");
+  const continueToPlanner = (): void => router.replace("/chat");
 
   return (
     <View className="flex-1 bg-white">
@@ -85,7 +85,7 @@ export default function PaywallScreen(): JSX.Element {
             <Button
               accessibilityLabel="Close offer"
               isIconOnly
-              onPress={continueToProfile}
+              onPress={continueToPlanner}
               size="sm"
               variant="secondary"
             >
@@ -215,7 +215,7 @@ export default function PaywallScreen(): JSX.Element {
           </Typography>
         </View>
 
-        <Button onPress={continueToProfile} size="lg">
+        <Button onPress={continueToPlanner} size="lg">
           <Button.Label className="font-bold">Unlock Flyith Premium</Button.Label>
         </Button>
 

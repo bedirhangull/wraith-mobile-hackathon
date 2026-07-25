@@ -2,11 +2,12 @@ oyku
 - splash - 16.00
 - welcome - 16.00 
 - auth - 17.00
-- onboarding - 19.00
+- onboarding - 18.00
     - ortalama budget sor
     - infullencer secmece sor batuhanfurkan5 olsun hindistan falan yazsin bayragi falan gozuksun
     - onboarding sonrasinda limited paywall goster
     - sevdigi yemek turlerini falan sorabilirsin
+    - hediye almaktan hoslanirmimis vs diye sor arkadaslarina gezi sonu vs diye
     - bir gezi icin kendisi icin neler kriitik otel benim icin kritik - yemekler benim icin featured olmasi gerekiyor tarzinda
     - nasil bir geziden hoslanir diye sor culturel yoksa experience gibi
 - 3 tane farkli paywall goster - 21.00
@@ -32,8 +33,10 @@ example chat
 - onboardingten alinan datayla hani bu gezide yemeklerden vs emin misin tarzinda sor suggestionlarda bulun
 - onboardingten alinan datayla bu gezi icin bence culturel yerine experience tercih etmelisin vs diye sor
 - eventler icin suggestionlarda bulun 
+
 - youtube
  - transcripte gore suggestionlar verme 
+
 
 - acil 
  - google services konulabilir
