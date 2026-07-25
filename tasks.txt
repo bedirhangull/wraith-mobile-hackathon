@@ -14,7 +14,8 @@ oyku
     - paketler weekly monthly ve yearly olmasi gerekiyor
     - feature list koyacaksin zaten bunlari rastgele koy sornasinda degistirebiliriz
 
-example paywallar falan koyacagim ready to use screens kisminda yer aliyor direkt
+authentication baglama simdilik sadece sey yap apple ve email auth koy sonrasinda supabase ile baglarim
+avatar ve infullencer fotograflarini gemini ile generate et memoji stlye olmasi gerekiyor example halleri assets folderi icerisinde avatars folderinda yer aliyor
 
 notes 
 - gorsel vs kullanacaksan memoji style olmasi gerekiyor ve backgroundu her zaman white olmasi gerekiyor ve shadow olmamasi gerektigini her zaman soyle
@@ -37,10 +38,8 @@ example chat
 - acil 
  - google services konulabilir
 
-
-
-
 - notification system
+- reservation ayni zamanda phone list vs
 - calendar system
 - live activity
 - share edince videoyu bizle o geziyi conversation ekleyip hani ona gore devam ettirebilme
