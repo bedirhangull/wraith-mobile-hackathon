@@ -1,0 +1,28 @@
+import type { ImageSourcePropType } from "react-native";
+
+export const travelerMemojis: ImageSourcePropType[] = [
+  require("../../assets/memojis/traveler-memoji-01.png"),
+  require("../../assets/memojis/traveler-memoji-02.png"),
+  require("../../assets/memojis/traveler-memoji-03.png"),
+  require("../../assets/memojis/traveler-memoji-04.png"),
+  require("../../assets/memojis/traveler-memoji-05.png"),
+  require("../../assets/memojis/traveler-memoji-06.png"),
+  require("../../assets/memojis/traveler-memoji-07.png"),
+  require("../../assets/memojis/traveler-memoji-08.png"),
+  require("../../assets/memojis/traveler-memoji-09.png"),
+  require("../../assets/memojis/traveler-memoji-10.png"),
+  require("../../assets/memojis/traveler-memoji-11.png"),
+  require("../../assets/memojis/traveler-memoji-12.png"),
+  require("../../assets/memojis/traveler-memoji-13.png"),
+  require("../../assets/memojis/traveler-memoji-14.png"),
+  require("../../assets/memojis/traveler-memoji-15.png"),
+  require("../../assets/memojis/traveler-memoji-16.png"),
+  require("../../assets/memojis/traveler-memoji-17.png"),
+  require("../../assets/memojis/traveler-memoji-18.png"),
+  require("../../assets/memojis/traveler-memoji-19.png"),
+  require("../../assets/memojis/traveler-memoji-20.png"),
+  require("../../assets/memojis/traveler-memoji-21.png"),
+  require("../../assets/memojis/traveler-memoji-22.png"),
+  require("../../assets/memojis/traveler-memoji-23.png"),
+  require("../../assets/memojis/traveler-memoji-24.png"),
+];
