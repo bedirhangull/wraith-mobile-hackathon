@@ -1,0 +1,52 @@
+oyku 
+- splash - 16.00
+- welcome - 16.00 
+- auth - 17.00
+- onboarding - 19.00
+    - ortalama budget sor
+    - infullencer secmece sor batuhanfurkan5 olsun hindistan falan yazsin bayragi falan gozuksun
+    - onboarding sonrasinda limited paywall goster
+    - sevdigi yemek turlerini falan sorabilirsin
+    - bir gezi icin kendisi icin neler kriitik otel benim icin kritik - yemekler benim icin featured olmasi gerekiyor tarzinda
+    - nasil bir geziden hoslanir diye sor culturel yoksa experience gibi
+- 3 tane farkli paywall goster - 21.00
+    - bir tanesi bottom sheet paywall olmasi gerekiyor
+    - paketler weekly monthly ve yearly olmasi gerekiyor
+    - feature list koyacaksin zaten bunlari rastgele koy sornasinda degistirebiliriz
+
+example paywallar falan koyacagim ready to use screens kisminda yer aliyor direkt
+
+notes 
+- gorsel vs kullanacaksan memoji style olmasi gerekiyor ve backgroundu her zaman white olmasi gerekiyor ve shadow olmamasi gerektigini her zaman soyle
+
+bedirhan
+- ana sayfa chatbot kismi vs keyboard + voice olabilir 
+
+feature list 
+example chat
+- nereye gidecegini sor
+- budget sor
+- onboardingten alinan datayla hani bu gezinde de acaba hostelde mi konaklamak istersin diye sor
+- sonrasinda onboardingte alinan datayla acaba son infullenceri gittiyse bak favori infullencer gezmis sende ister misin vs falan diye bu seyhat planini
+- onboardingten alinan datayla hani bu gezide yemeklerden vs emin misin tarzinda sor suggestionlarda bulun
+- onboardingten alinan datayla bu gezi icin bence culturel yerine experience tercih etmelisin vs diye sor
+- eventler icin suggestionlarda bulun 
+- youtube
+ - transcripte gore suggestionlar verme 
+
+- acil 
+ - google services konulabilir
+
+
+
+
+- notification system
+- calendar system
+- live activity
+- share edince videoyu bizle o geziyi conversation ekleyip hani ona gore devam ettirebilme
+
+
+mcp servers -> eger gerekirse
+ - supabase mcp kur backend icin
+
+
