@@ -540,6 +540,31 @@ export function ReviewPlanSheet({
                       </Card>
                     ) : null}
 
+                    {brief.planningMode === "influencer" && brief.influencerSource ? (
+                      <Card variant="secondary">
+                        <Card.Body className="gap-2">
+                          <Chip size="sm" variant="soft" color="accent">
+                            <Chip.Label>{tr ? "Influencer rotası" : "Creator route"}</Chip.Label>
+                          </Chip>
+                          <Card.Title numberOfLines={2}>{brief.influencerSource.name}</Card.Title>
+                          <Card.Description>
+                            {brief.influencerSource.handle}
+                            {brief.influencerSource.niche
+                              ? ` · ${brief.influencerSource.niche}`
+                              : ""}
+                          </Card.Description>
+                          <Typography.Paragraph className="text-sm text-muted" numberOfLines={2}>
+                            {brief.influencerSource.route.map((stop) => stop.city).join(" → ")}
+                          </Typography.Paragraph>
+                          {brief.influencerSource.context ? (
+                            <Typography.Paragraph className="text-sm text-muted" numberOfLines={4}>
+                              {brief.influencerSource.context}
+                            </Typography.Paragraph>
+                          ) : null}
+                        </Card.Body>
+                      </Card>
+                    ) : null}
+
                     {brief.chosenFlight ? (
                       <Card variant="secondary">
                         <Card.Body className="gap-2">
@@ -607,7 +632,8 @@ export function ReviewPlanSheet({
 
                     {!brief.chosenFlight &&
                     !brief.chosenHotel &&
-                    brief.planningMode !== "youtube" ? (
+                    brief.planningMode !== "youtube" &&
+                    brief.planningMode !== "influencer" ? (
                       <Typography.Paragraph className="text-sm text-muted">
                         {tr
                           ? "Henüz uçuş veya otel seçilmedi — sohbette kartlardan seçebilirsin."

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import { DEFAULT_TRIP_LENGTH_DAYS, GEMINI_TURN_BUDGET_MS } from "../constants";
 import { buildSystemPrompt } from "../prompts/systemPrompt";
@@ -8,7 +8,10 @@ import {
   analyzeYouTubeTravelSource,
 } from "../services/geminiClient";
 import { mapDestinations, mapFlights, mapHotels, mapPlaces } from "../services/mappers";
-import { inMemoryPersistenceAdapter } from "../services/persistence";
+import {
+  loadConversation,
+  saveConversation,
+} from "../services/persistence";
 import { resolveAirportCode } from "../services/resolveAirport";
 import { ensureDestinationGeo } from "../services/resolveDestinationGeo";
 import {
@@ -32,6 +35,13 @@ import {
   YOUTUBE_SKIP_TOPIC_IDS,
 } from "../services/youtubeBrief";
 import { ingestYouTubeUrl } from "../services/youtubeIngest";
+import {
+  briefPatchFromInfluencer,
+  influencerPlanResetPatch,
+  influencerSourceFromInfluencer,
+  resolveInfluencerPlaces,
+  INFLUENCER_SKIP_TOPIC_IDS,
+} from "../services/influencerBrief";
 import { chatReducer, createInitialChatState } from "../state/chatReducer";
 import {
   assumableTopicIds,
@@ -69,6 +79,8 @@ import type {
   TripBrief,
   UserTurn,
 } from "../types";
+import type { Influencer } from "@/data/influencers";
+import { influencerById, influencerByName } from "@/data/influencers";
 import { buildDayPlanSlots, dayPlanLabel, dayPlanSlotQueries } from "../utils/dayPlan";
 import { formatMonthLabel, formatShortDate } from "../utils/dates";
 import { detectReplyLocale } from "../utils/fallbackCopy";
@@ -81,6 +93,7 @@ import {
   buildTopicTurn,
   chipsForNextTopic,
   ESSENTIAL_TOPIC_IDS,
+  missingSourceEssentials,
 } from "../utils/nextTopicTurn";
 import { normalizeAssistantTurn, canOfferDateChips } from "../utils/normalizeTurn";
 import { creativePlanReady, creativeSnag } from "../utils/chatCopy";
@@ -93,6 +106,10 @@ import {
 import { isInteractiveTurn, type QueuedStep } from "../utils/stepQueue";
 import { withTimeout } from "../utils/withTimeout";
 import { isYouTubeUrl } from "../utils/youtubeUrl";
+
+function isSourceDrivenMode(brief: TripBrief): boolean {
+  return brief.planningMode === "youtube" || brief.planningMode === "influencer";
+}
 
 const PLACE_QUERY_BY_CATEGORY: Record<Exclude<PlaceCategory, "events">, string> = {
   restaurants: "top restaurants",
@@ -267,11 +284,9 @@ function markAnsweredTopicsFromPatch(answered: Set<string>, patch: Partial<TripB
     answered.add("destination");
   }
   if (patch.originAirportCode !== undefined) answered.add("origin");
-  if (
-    patch.tripLengthDays !== undefined ||
-    patch.startDate !== undefined ||
-    patch.endDate !== undefined
-  ) {
+  // Only concrete calendar dates settle "dates" — tripLengthDays alone must not
+  // suppress the "how many days / which dates" question (YouTube ingest sets it).
+  if (patch.startDate !== undefined || patch.endDate !== undefined) {
     answered.add("dates");
   }
   if (
@@ -832,10 +847,16 @@ function resolveNumberSelection(text: string, list: SelectableList): number | nu
   return null;
 }
 
-export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
+export function useTravelChatEngine(
+  onboarding?: TripBrief["onboarding"],
+  conversationId?: string
+) {
   const [state, dispatch] = useReducer(chatReducer, undefined, () =>
     createInitialChatState(onboarding)
   );
+  /** Matches `conversationId` only after load/reset finishes — gates autosave. */
+  const [hydratedConversationId, setHydratedConversationId] = useState<string | null>(null);
+  const isHydrated = Boolean(conversationId) && hydratedConversationId === conversationId;
   const lastSelectableListRef = useRef<SelectableList | null>(null);
   const isBusyRef = useRef(false);
   const activeSearchesRef = useRef(0);
@@ -880,6 +901,68 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
   useEffect(() => {
     readyForReviewRef.current = readyForReview;
   }, [readyForReview]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const loaded = await loadConversation(conversationId);
+      if (cancelled) return;
+
+      if (loaded) {
+        askedTopicsRef.current = new Set(loaded.askedTopics);
+        answeredTopicsRef.current = new Set(loaded.answeredTopics);
+        localeRef.current = loaded.locale ?? null;
+        openStepRef.current = null;
+        stepQueueRef.current = [];
+        logisticsFanoutDoneRef.current = false;
+        hotelFanoutDoneRef.current = false;
+        experienceFanoutDoneRef.current = false;
+        dispatch({
+          type: "HYDRATE",
+          messages: loaded.messages,
+          brief: loaded.brief,
+          locale: loaded.locale,
+        });
+      } else {
+        askedTopicsRef.current = new Set();
+        answeredTopicsRef.current = new Set();
+        localeRef.current = null;
+        openStepRef.current = null;
+        stepQueueRef.current = [];
+        logisticsFanoutDoneRef.current = false;
+        hotelFanoutDoneRef.current = false;
+        experienceFanoutDoneRef.current = false;
+        dispatch({ type: "RESET", onboarding });
+      }
+
+      setHydratedConversationId(conversationId);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Only re-hydrate when the conversation id changes — not when onboarding object identity shifts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId || !isHydrated) return;
+
+    const timer = setTimeout(() => {
+      void saveConversation(conversationId, {
+        messages: state.messages,
+        brief: state.brief,
+        locale: localeRef.current ?? state.locale,
+        askedTopics: [...askedTopicsRef.current],
+        answeredTopics: [...answeredTopicsRef.current],
+      });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [conversationId, isHydrated, state.messages, state.brief, state.locale]);
 
   const bumpSearchActivity = useCallback((activity: ActivityKind | undefined) => {
     dispatch({ type: "SEARCH_ACTIVITY", activity });
@@ -1208,7 +1291,7 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
   /** When flight is locked and hotel prefs settle, search hotels once. */
   const maybeFanoutHotels = useCallback(
     (brief: TripBrief, locale: "tr" | "en"): boolean => {
-      if (brief.planningMode === "youtube") return false;
+      if (isSourceDrivenMode(brief)) return false;
       if (hotelFanoutDoneRef.current || brief.chosenHotel) return false;
       if (!readyToSearchHotels(brief)) return false;
       hotelFanoutDoneRef.current = true;
@@ -1232,7 +1315,7 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
   /** Once a hotel and cuisine are known, show restaurant cards before more preference questions. */
   const maybeFanoutExperiences = useCallback(
     (brief: TripBrief, locale: "tr" | "en"): boolean => {
-      if (brief.planningMode === "youtube") return false;
+      if (isSourceDrivenMode(brief)) return false;
       if (experienceFanoutDoneRef.current || brief.restaurantsShown) return false;
       const hasCuisine = Boolean(brief.cuisineTypes?.length || brief.foodPreferences?.length);
       if (!brief.chosenHotel || !brief.destination || !hasCuisine) return false;
@@ -1529,7 +1612,7 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
           if (!isReadyForReview(brief) || readyForReviewRef.current || !brief.chosenFlight) {
             return;
           }
-          if (brief.planningMode !== "youtube" && !brief.chosenHotel) return;
+          if (brief.planningMode !== "youtube" && brief.planningMode !== "influencer" && !brief.chosenHotel) return;
           emitAssistantTurn({
             kind: "suggestions",
             chips: [
@@ -1610,13 +1693,17 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
         return true;
       });
       flushQueue();
-      if (nextBrief.planningMode === "youtube" && isReadyForReview(nextBrief)) {
+      if (isSourceDrivenMode(nextBrief) && isReadyForReview(nextBrief)) {
         emitAssistantTurn({
           kind: "text",
           text:
             locale === "tr"
-              ? "Uçuş seçildi — videodaki rota planını hazırlayabilirim."
-              : "Flight locked — I can build the plan from the video route.",
+              ? nextBrief.planningMode === "influencer"
+                ? "Uçuş seçildi — influencer rotasından planı hazırlayabilirim."
+                : "Uçuş seçildi — videodaki rota planını hazırlayabilirim."
+              : nextBrief.planningMode === "influencer"
+                ? "Flight locked — I can build the plan from the influencer route."
+                : "Flight locked — I can build the plan from the video route.",
         });
         emitAssistantTurn({
           kind: "suggestions",
@@ -2189,6 +2276,130 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
     [bumpSearchActivity, emitAssistantTurn, enqueueNextTopic]
   );
 
+  /**
+   * Start (or replace) the plan from a creator's curated route — local data, no Gemini.
+   * Mirrors ingestYouTubeLink without the network / analysis steps.
+   */
+  const startInfluencerPlan = useCallback(
+    async (influencer: Influencer) => {
+      if (isBusyRef.current) return;
+      isBusyRef.current = true;
+
+      const locale = localeRef.current ?? stateRef.current.locale ?? "tr";
+      const onboarding = stateRef.current.brief.onboarding;
+
+      const resetPatch = influencerPlanResetPatch(onboarding);
+      stateRef.current = {
+        ...stateRef.current,
+        brief: mergeBriefPatch(initialTripBrief(onboarding), resetPatch),
+      };
+      askedTopicsRef.current = new Set();
+      answeredTopicsRef.current = new Set();
+      logisticsFanoutDoneRef.current = false;
+      hotelFanoutDoneRef.current = false;
+      experienceFanoutDoneRef.current = false;
+      awaitingTypedAnswerRef.current = null;
+      pendingExploreRef.current = null;
+      openStepRef.current = null;
+      stepQueueRef.current = [];
+      lastSelectableListRef.current = null;
+      dispatch({ type: "BRIEF_PATCHED", patch: resetPatch });
+      dispatch({ type: "STATUS_CHANGED", status: "awaiting_model", activity: "influencer" });
+      bumpSearchActivity("influencer");
+
+      try {
+        const source = influencerSourceFromInfluencer(influencer);
+        const placeOptions = await resolveInfluencerPlaces(source);
+        const patch = {
+          ...briefPatchFromInfluencer(source, onboarding),
+          shownPlaceOptions: placeOptions,
+        };
+        const nextBrief = mergeBriefPatch(stateRef.current.brief, patch);
+        stateRef.current = { ...stateRef.current, brief: nextBrief };
+        answeredTopicsRef.current.add("destination");
+        askedTopicsRef.current.add("destination");
+        for (const id of INFLUENCER_SKIP_TOPIC_IDS) {
+          answeredTopicsRef.current.add(id);
+          askedTopicsRef.current.add(id);
+        }
+        markAnsweredTopicsFromPatch(answeredTopicsRef.current, patch);
+        dispatch({ type: "BRIEF_PATCHED", patch });
+
+        void resolveAirportCode(source.route[0]?.city ?? source.destinationCity).then((code) => {
+          if (!code) return;
+          const airportPatch = { destinationAirportCode: code };
+          dispatch({ type: "BRIEF_PATCHED", patch: airportPatch });
+          stateRef.current = {
+            ...stateRef.current,
+            brief: mergeBriefPatch(stateRef.current.brief, airportPatch),
+          };
+        });
+        void ensureDestinationGeo({
+          ...nextBrief,
+          destination: source.route[0]?.city ?? source.destinationCity,
+        }).then((geoPatch) => {
+          if (!geoPatch || Object.keys(geoPatch).length === 0) return;
+          dispatch({ type: "BRIEF_PATCHED", patch: geoPatch });
+          stateRef.current = {
+            ...stateRef.current,
+            brief: mergeBriefPatch(stateRef.current.brief, geoPatch),
+          };
+        });
+
+        const placeNames = source.route.flatMap((stop) => stop.places).slice(0, 10);
+        const routeCities = source.route.map((stop) => stop.city);
+
+        emitAssistantTurn({
+          kind: "influencer_route",
+          influencerId: source.id,
+          name: source.name,
+          handle: source.handle,
+          niche: source.niche,
+          context: source.context,
+          routeCities,
+          placeNames,
+          summary: source.context,
+        });
+
+        if (placeOptions.length > 0) {
+          emitAssistantTurn({
+            kind: "places",
+            category: "attractions",
+            label:
+              locale === "tr"
+                ? `${source.name} rotasındaki yerler`
+                : `Places from ${source.name}'s route`,
+            options: placeOptions,
+          });
+        }
+
+        emitAssistantTurn({
+          kind: "text",
+          text:
+            locale === "tr"
+              ? `${source.name} rotasından ${placeNames.length} mekan çıkardım. Uçuş için sadece birkaç bilgi kaldı.`
+              : `I pulled ${placeNames.length} places from ${source.name}'s route. Just a few flight details left.`,
+        });
+
+        enqueueNextTopic();
+      } catch (error) {
+        console.warn("[useTravelChatEngine] Influencer plan failed:", error);
+        emitAssistantTurn({
+          kind: "text",
+          text:
+            locale === "tr"
+              ? "Influencer rotasını yükleyemedim. Tekrar dener misin?"
+              : "I couldn’t load that influencer route. Try again?",
+        });
+      } finally {
+        bumpSearchActivity(undefined);
+        isBusyRef.current = false;
+        dispatch({ type: "STATUS_CHANGED", status: "idle" });
+      }
+    },
+    [bumpSearchActivity, emitAssistantTurn, enqueueNextTopic]
+  );
+
   const sendText = useCallback(
     (text: string) => {
       const list = lastSelectableListRef.current;
@@ -2537,6 +2748,33 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
         return;
       }
 
+      // Influencer route chip — start a source-driven plan from the creator's dataset.
+      if (chipId === "influencer-route") {
+        consumeOpenStep();
+        dispatch({ type: "USER_TURN_ADDED", turn: { kind: "chip_selection", chipId, label } });
+        const onboarding = brief.onboarding;
+        const influencer =
+          (onboarding?.favoriteInfluencerId
+            ? influencerById(onboarding.favoriteInfluencerId)
+            : undefined) ??
+          (onboarding?.favoriteInfluencer
+            ? influencerByName(onboarding.favoriteInfluencer)
+            : undefined);
+        if (influencer) {
+          void startInfluencerPlan(influencer);
+        } else {
+          // Fallback — treat as a plain destination so the chat doesn't stall.
+          const destPatch = { destination: label };
+          const nextBrief = mergeBriefPatch(brief, destPatch);
+          stateRef.current = { ...stateRef.current, brief: nextBrief };
+          answeredTopicsRef.current.add("destination");
+          askedTopicsRef.current.add("destination");
+          dispatch({ type: "BRIEF_PATCHED", patch: destPatch });
+          enqueueNextTopic();
+        }
+        return;
+      }
+
       // Region vibes — ask origin (if needed) then SerpAPI explore cards.
       if (chipId === "dest-europe" || chipId === "dest-surprise") {
         consumeOpenStep();
@@ -2640,7 +2878,32 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
         const nextBrief = mergeBriefPatch(brief, patch);
         stateRef.current = { ...stateRef.current, brief: nextBrief };
         dispatch({ type: "BRIEF_PATCHED", patch });
+        for (const topicId of patch.skippedTopics ?? []) {
+          answeredTopicsRef.current.add(topicId);
+          askedTopicsRef.current.add(topicId);
+        }
+        // Also mark the topic that was just appended (withSkippedTopic merges the full list).
+        if (chipId === "skip-day-plan") {
+          answeredTopicsRef.current.add("day_plan");
+          askedTopicsRef.current.add("day_plan");
+        } else if (chipId === "skip-restaurants") {
+          answeredTopicsRef.current.add("restaurants");
+          askedTopicsRef.current.add("restaurants");
+        } else if (chipId === "skip-attractions") {
+          answeredTopicsRef.current.add("attractions");
+          askedTopicsRef.current.add("attractions");
+        }
         dispatch({ type: "USER_TURN_ADDED", turn: { kind: "chip_selection", chipId, label } });
+        // "Skip day plan" means go straight to the itinerary chips / plan.
+        if (chipId === "skip-day-plan") {
+          openStepRef.current = null;
+          stepQueueRef.current = stepQueueRef.current.filter(
+            (step) =>
+              !(step.kind === "turn" && step.turn.kind === "day_plan") &&
+              step.kind !== "next_topic"
+          );
+          flushQueue();
+        }
         enqueueNextTopic();
         return;
       }
@@ -2671,6 +2934,7 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
       resolveLocale,
       runExploreDestinations,
       sendUserTurn,
+      startInfluencerPlan,
     ]
   );
 
@@ -2700,22 +2964,37 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
   const confirmPlan = useCallback(() => {
     const locale = localeRef.current ?? "en";
     const destination = state.brief.destination ?? (locale === "tr" ? "rotan" : "your destination");
+    const confirmText =
+      locale === "tr"
+        ? `${destination} planın hazır — harika bir gezi olsun!`
+        : `Your trip to ${destination} is locked in — have an amazing time!`;
+    const confirmedBrief = { ...state.brief, status: "confirmed" as const };
     dispatch({ type: "BRIEF_PATCHED", patch: { status: "confirmed" } });
     dispatch({
       type: "ASSISTANT_TURN_ADDED",
       turn: {
         kind: "text",
-        text:
-          locale === "tr"
-            ? `${destination} planın hazır — harika bir gezi olsun!`
-            : `Your trip to ${destination} is locked in — have an amazing time!`,
+        text: confirmText,
       },
     });
-    void inMemoryPersistenceAdapter.saveConversation(state.messages, {
-      ...state.brief,
-      status: "confirmed",
-    });
-  }, [state.brief, state.messages]);
+    if (conversationId) {
+      void saveConversation(conversationId, {
+        messages: [
+          ...state.messages,
+          {
+            id: `${Date.now().toString(36)}-confirm`,
+            role: "assistant",
+            turn: { kind: "text", text: confirmText },
+            createdAt: Date.now(),
+          },
+        ],
+        brief: confirmedBrief,
+        locale: localeRef.current ?? state.locale,
+        askedTopics: [...askedTopicsRef.current],
+        answeredTopics: [...answeredTopicsRef.current],
+      });
+    }
+  }, [conversationId, state.brief, state.messages, state.locale]);
 
   const announcePlanReady = useCallback(() => {
     const locale = localeRef.current ?? stateRef.current.locale ?? "en";
@@ -2753,6 +3032,32 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
     [closeOpenStep, emitAssistantTurn]
   );
 
+  /**
+   * YouTube review tapped before readiness — never silent. Re-ask missing essentials
+   * (origin / dates / travelers) so the user can finish the flight path.
+   */
+  const requestMissingForReview = useCallback(
+    (chipId: string, label: string) => {
+      const locale = localeRef.current ?? stateRef.current.locale ?? "en";
+      const brief = stateRef.current.brief;
+      closeOpenStep();
+      dispatch({ type: "USER_TURN_ADDED", turn: { kind: "chip_selection", chipId, label } });
+      emitAssistantTurn({
+        kind: "text",
+        text:
+          locale === "tr"
+            ? "Planı açmadan önce uçuş için birkaç bilgi lazım."
+            : "Need a few flight details before I can open the plan.",
+      });
+      for (const topicId of missingSourceEssentials(brief)) {
+        askedTopicsRef.current.delete(topicId);
+        answeredTopicsRef.current.delete(topicId);
+      }
+      enqueueNextTopic();
+    },
+    [closeOpenStep, emitAssistantTurn, enqueueNextTopic]
+  );
+
   const locale = useMemo(() => {
     if (state.locale) return state.locale;
     for (let index = state.messages.length - 1; index >= 0; index -= 1) {
@@ -2787,6 +3092,8 @@ export function useTravelChatEngine(onboarding?: TripBrief["onboarding"]) {
     confirmPlan,
     announcePlanReady,
     acknowledgeChip,
+    requestMissingForReview,
+    startInfluencerPlan,
     requestDayPlan,
     noteContext,
     isDayPlanSettled: () => isDayPlanSettled(stateRef.current.brief),

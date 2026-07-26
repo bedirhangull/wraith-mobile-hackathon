@@ -3,15 +3,15 @@ import { useSyncExternalStore } from "react";
 import type { OnboardingContext } from "@/features/travel-chat/types";
 
 /**
- * Seeded from tasks.txt so the chat can personalize immediately. Oyku's real
- * onboarding screens later call `setUserProfile()` — the chat already reads
- * from here, so no engine changes are needed when those screens land.
+ * Seeded from a real dataset entry so the chat can personalize immediately.
+ * Real onboarding screens later call `setUserProfile()`.
  */
 const SEEDED_PROFILE: OnboardingContext = {
   averageBudget: 1800,
-  favoriteInfluencer: "batuhanfurkan5",
-  favoriteDestination: "India",
-  influencerDestinations: ["India", "Goa", "Rajasthan"],
+  favoriteInfluencer: "Batuhan Furkan",
+  favoriteInfluencerId: "batuhan-furkan-5",
+  favoriteDestination: "Delhi",
+  influencerDestinations: ["Delhi"],
   foodPreferences: ["street food", "spicy", "seafood"],
   hostelVsHotel: "hostel",
   culturalVsExperience: "cultural",

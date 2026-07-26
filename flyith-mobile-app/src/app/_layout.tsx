@@ -6,6 +6,7 @@ import { type JSX, useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
+import { PurchasesProvider } from "@/features/subscription/PurchasesProvider";
 import { prepareModelSafe } from "@/features/travel-chat/utils/safeDataDetector";
 
 import "../global.css";
@@ -60,13 +61,15 @@ export default function RootLayout(): JSX.Element {
             },
           }}
         >
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen
-              name="generating-plan"
-              options={{ animation: "fade", gestureEnabled: false }}
-            />
-          </Stack>
+          <PurchasesProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen
+                name="generating-plan"
+                options={{ animation: "fade", gestureEnabled: false }}
+              />
+            </Stack>
+          </PurchasesProvider>
         </HeroUINativeProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>

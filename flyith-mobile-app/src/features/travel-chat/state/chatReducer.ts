@@ -29,6 +29,12 @@ export type ChatAction =
   | { type: "STATUS_CHANGED"; status: ChatStatus; activity?: ActivityKind; errorMessage?: string }
   | { type: "SEARCH_ACTIVITY"; activity?: ActivityKind }
   | { type: "LOCALE_LOCKED"; locale: "tr" | "en" }
+  | {
+      type: "HYDRATE";
+      messages: ChatMessage[];
+      brief: TripBrief;
+      locale?: "tr" | "en";
+    }
   | { type: "RESET"; onboarding?: TripBrief["onboarding"] };
 
 export function createInitialChatState(onboarding?: TripBrief["onboarding"]): ChatState {
@@ -75,6 +81,13 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, searchActivity: action.activity };
     case "LOCALE_LOCKED":
       return state.locale ? state : { ...state, locale: action.locale };
+    case "HYDRATE":
+      return {
+        messages: action.messages,
+        brief: action.brief,
+        status: "idle",
+        locale: action.locale,
+      };
     case "RESET":
       return createInitialChatState(action.onboarding);
     default:

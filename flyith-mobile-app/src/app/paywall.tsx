@@ -1,10 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Button, Surface, Typography, useThemeColor } from "heroui-native";
+import { Button, Surface, Typography, useThemeColor, useToast } from "heroui-native";
 import type { ComponentProps, JSX } from "react";
 import { useEffect, useState } from "react";
 import { Image, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { PaywallLegalFooter } from "@/features/subscription/PaywallLegalFooter";
+import { PaywallOfferError } from "@/features/subscription/PaywallOfferError";
+import { usePremium } from "@/features/subscription/usePremium";
 
 interface PremiumFeature {
   description: string;
@@ -48,12 +52,29 @@ function formatCountdown(totalSeconds: number): string[] {
 export default function PaywallScreen(): JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { toast } = useToast();
   const [backgroundColor, foregroundColor, accentColor] = useThemeColor([
     "background",
     "foreground",
     "accent",
   ]);
   const [secondsLeft, setSecondsLeft] = useState(63_252);
+  const {
+    packages,
+    purchase,
+    restore,
+    refresh,
+    isPurchasing,
+    isLoading,
+    error,
+    isMockMode,
+    activateMockPremium,
+  } = usePremium();
+  const annual = packages.annual;
+  // In mock mode: offers are always "available" — we show demo prices instead.
+  const offersUnavailable = isMockMode ? false : (Boolean(error) || (!isLoading && !annual));
+  // Demo prices shown when mock mode is active.
+  const effectiveAnnualPrice = isMockMode ? "$29.99" : annual?.product.priceString;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -64,7 +85,60 @@ export default function PaywallScreen(): JSX.Element {
   }, []);
 
   const countdown = formatCountdown(secondsLeft);
-  const continueToPlanner = (): void => router.replace("/chat");
+  const skipToPlanner = (): void => router.replace("/chat");
+
+  async function handlePurchase(): Promise<void> {
+    if (isMockMode) {
+      const result = await activateMockPremium();
+      if (result === "success") {
+        toast.show({ label: "Welcome to Flyaith Premium" });
+        router.replace("/chat");
+      }
+      return;
+    }
+
+    if (!annual) {
+      toast.show({
+        variant: "danger",
+        label: "Offer unavailable",
+        description: error ?? "Subscription packages haven't loaded yet. Try again in a moment.",
+      });
+      return;
+    }
+
+    const result = await purchase(annual);
+    if (result === "success") {
+      toast.show({ label: "Welcome to Flyaith Premium" });
+      router.replace("/chat");
+      return;
+    }
+    if (result === "error" || result === "unavailable") {
+      toast.show({
+        variant: "danger",
+        label: "Purchase failed",
+        description: "Please try again or restore previous purchases.",
+      });
+    }
+  }
+
+  async function handleRestore(): Promise<void> {
+    const result = await restore();
+    if (result === "success") {
+      toast.show({ label: "Purchases restored" });
+      router.replace("/chat");
+      return;
+    }
+    if (result !== "cancelled") {
+      toast.show({
+        variant: "danger",
+        label: "Nothing to restore",
+        description: "No active Premium subscription was found for this Apple ID.",
+      });
+    }
+  }
+
+  const isBusy = isPurchasing || isLoading;
+  const buttonDisabled = isMockMode ? isPurchasing : (isBusy || offersUnavailable);
 
   return (
     <View className="flex-1 bg-white">
@@ -85,7 +159,7 @@ export default function PaywallScreen(): JSX.Element {
             <Button
               accessibilityLabel="Close offer"
               isIconOnly
-              onPress={continueToPlanner}
+              onPress={skipToPlanner}
               size="sm"
               variant="secondary"
             >
@@ -159,9 +233,17 @@ export default function PaywallScreen(): JSX.Element {
             $59.99
           </Typography>
           <Typography type="h3" weight="semibold">
-            $29.99 / year
+            {effectiveAnnualPrice ? `${effectiveAnnualPrice} / year` : "Price loading…"}
           </Typography>
         </View>
+
+        {!isMockMode && offersUnavailable ? (
+          <PaywallOfferError
+            isBusy={isBusy}
+            message={error ?? "Subscription plans aren't available yet. Please try again in a moment."}
+            onRetry={() => void refresh()}
+          />
+        ) : null}
 
         <View className="gap-2">
           {premiumFeatures.map((feature) => (
@@ -210,18 +292,18 @@ export default function PaywallScreen(): JSX.Element {
               />
             ))}
           </View>
-          <Typography type="body-sm" weight="medium">
+          <Typography className="max-w-72 text-center" type="body-sm" weight="medium">
             Join 12,000+ travelers planning with their favorite creators
           </Typography>
         </View>
 
-        <Button onPress={continueToPlanner} size="lg">
-          <Button.Label className="font-bold">Unlock Flyith Premium</Button.Label>
+        <Button isDisabled={buttonDisabled} onPress={() => void handlePurchase()} size="lg">
+          <Button.Label className="font-bold">
+            {isPurchasing ? "Purchasing…" : "Unlock Flyaith Premium"}
+          </Button.Label>
         </Button>
 
-        <Typography className="text-center" color="muted" type="body-xs">
-          Cancel anytime · Secure purchase
-        </Typography>
+        <PaywallLegalFooter isBusy={isBusy} onRestore={() => void handleRestore()} />
       </Surface>
     </View>
   );

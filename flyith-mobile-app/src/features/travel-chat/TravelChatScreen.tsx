@@ -7,7 +7,14 @@ import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useToast } from "heroui-native";
 
+import { influencerById, type Influencer } from "@/data/influencers";
 import { useUserProfile } from "@/features/onboarding/profile";
+import {
+  consumePendingPremiumAction,
+  paywallPathForAction,
+  setPendingPremiumAction,
+} from "@/features/subscription/premiumChatGate";
+import { usePremium } from "@/features/subscription/usePremium";
 import { BookingOptionsSheet } from "./components/BookingOptionsSheet";
 import { CalendarSheet } from "./components/CalendarSheet";
 import { ChatHeader } from "./components/ChatHeader";
@@ -18,6 +25,7 @@ import { MessageList } from "./components/MessageList";
 import { PlaceDetailSheet } from "./components/PlaceDetailSheet";
 import { ReviewPlanSheet } from "./components/ReviewPlanSheet";
 import { useTravelChatEngine } from "./hooks/useTravelChatEngine";
+import { claimNormalChatUsage } from "./services/persistence";
 import type { DayPlanSlot, FlightOption, HotelOption, PlaceOption } from "./types";
 import { activityPhrases, orbStateForActivity } from "./utils/activityLabels";
 import { canOfferDateChips } from "./utils/normalizeTurn";
@@ -29,12 +37,14 @@ import {
   planPrepareFailedToast,
   slotToastLabel,
 } from "./utils/selectionFeedback";
+import { isYouTubeUrl } from "./utils/youtubeUrl";
 
-export function TravelChatScreen(): JSX.Element {
+export function TravelChatScreen({ conversationId }: { conversationId: string }): JSX.Element {
   const profile = useUserProfile();
-  const engine = useTravelChatEngine(profile);
+  const engine = useTravelChatEngine(profile, conversationId);
   const router = useRouter();
   const { toast } = useToast();
+  const { isPremium, isLoading: isPremiumLoading } = usePremium();
   const [isReviewSheetOpen, setIsReviewSheetOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [bookingFlight, setBookingFlight] = useState<FlightOption | null>(null);
@@ -42,8 +52,10 @@ export function TravelChatScreen(): JSX.Element {
   const [placeDetail, setPlaceDetail] = useState<PlaceOption | null>(null);
   const [isStickyViewEnabled, setIsStickyViewEnabled] = useState(false);
   const [isPreparingPlan, setIsPreparingPlan] = useState(false);
+  const [isClaimingUsage, setIsClaimingUsage] = useState(false);
   const awaitingPlanAnnounceRef = useRef(false);
   const announcePlanReadyRef = useRef(engine.announcePlanReady);
+  const pendingConsumedRef = useRef(false);
 
   useEffect(() => {
     announcePlanReadyRef.current = engine.announcePlanReady;
@@ -56,6 +68,45 @@ export function TravelChatScreen(): JSX.Element {
       announcePlanReadyRef.current();
     }, [])
   );
+
+  const openPaywall = useCallback(
+    (kind: "normal_text" | "youtube" | "influencer") => {
+      router.push({
+        pathname: paywallPathForAction(kind),
+        params: { returnConversationId: conversationId },
+      });
+    },
+    [conversationId, router]
+  );
+
+  // After purchase/restore, apply the one-shot action that was blocked.
+  useFocusEffect(
+    useCallback(() => {
+      if (isPremiumLoading || !isPremium || pendingConsumedRef.current) return;
+
+      const action = consumePendingPremiumAction(conversationId);
+      if (!action) return;
+      pendingConsumedRef.current = true;
+
+      if (action.kind === "youtube") {
+        engine.sendText(action.url);
+        return;
+      }
+      if (action.kind === "normal_text") {
+        engine.sendText(action.text);
+        return;
+      }
+      if (action.kind === "influencer") {
+        const influencer = influencerById(action.influencerId);
+        if (influencer) void engine.startInfluencerPlan(influencer);
+      }
+    }, [conversationId, engine, isPremium, isPremiumLoading])
+  );
+
+  useEffect(() => {
+    // Allow consuming again if the user leaves and comes back with a new pending action.
+    pendingConsumedRef.current = false;
+  }, [conversationId]);
 
   const handleSelectFlight = useCallback(
     (flight: FlightOption) => {
@@ -114,19 +165,121 @@ export function TravelChatScreen(): JSX.Element {
     [engine, toast]
   );
 
+  const handleSelectInfluencer = useCallback(
+    (influencer: Influencer): boolean => {
+      if (isPremiumLoading) return false;
+      if (!isPremium) {
+        setPendingPremiumAction({
+          kind: "influencer",
+          conversationId,
+          influencerId: influencer.id,
+        });
+        openPaywall("influencer");
+        return false;
+      }
+      void engine.startInfluencerPlan(influencer);
+      return true;
+    },
+    [conversationId, engine, isPremium, isPremiumLoading, openPaywall]
+  );
+
+  const handleSend = useCallback(
+    async (text: string) => {
+      if (isPremiumLoading || isClaimingUsage) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      if (isYouTubeUrl(trimmed)) {
+        if (!isPremium) {
+          setPendingPremiumAction({
+            kind: "youtube",
+            conversationId,
+            url: trimmed,
+          });
+          openPaywall("youtube");
+          return;
+        }
+        engine.sendText(trimmed);
+        return;
+      }
+
+      const mode = engine.brief.planningMode ?? "chat";
+      if (!isPremium && mode === "chat") {
+        setIsClaimingUsage(true);
+        try {
+          const claimed = await claimNormalChatUsage(conversationId);
+          if (!claimed) {
+            setPendingPremiumAction({
+              kind: "normal_text",
+              conversationId,
+              text: trimmed,
+            });
+            openPaywall("normal_text");
+            return;
+          }
+        } finally {
+          setIsClaimingUsage(false);
+        }
+      }
+
+      engine.sendText(trimmed);
+    },
+    [
+      conversationId,
+      engine,
+      isClaimingUsage,
+      isPremium,
+      isPremiumLoading,
+      openPaywall,
+    ]
+  );
+
   const handleSelectChip = useCallback(
     (chipId: string, label: string) => {
-      if (isPreparingPlan) return;
+      if (isPreparingPlan || isPremiumLoading) return;
+
+      if (chipId === "influencer-route") {
+        if (!isPremium) {
+          const influencerId = engine.brief.onboarding?.favoriteInfluencerId;
+          if (influencerId) {
+            setPendingPremiumAction({
+              kind: "influencer",
+              conversationId,
+              influencerId,
+            });
+          }
+          openPaywall("influencer");
+          return;
+        }
+      }
 
       if (chipId === "create-travel-plan" || chipId === "review-plan") {
-        // YouTube mode skips day-plan interrogation; readiness is flight + video places.
-        if (engine.brief.planningMode !== "youtube" && !engine.isDayPlanSettled()) {
+        // Source-driven modes skip day-plan interrogation; readiness is flight + places.
+        if (
+          engine.brief.planningMode !== "youtube" &&
+          engine.brief.planningMode !== "influencer" &&
+          !engine.isDayPlanSettled()
+        ) {
           engine.requestDayPlan();
           return;
         }
-        if (engine.brief.planningMode === "youtube" && !engine.readyForReview) {
+        if (
+          (engine.brief.planningMode === "youtube" ||
+            engine.brief.planningMode === "influencer") &&
+          !engine.readyForReview
+        ) {
+          engine.requestMissingForReview(chipId, label);
           return;
         }
+      }
+
+      // "Gerek yok / Skip for now" on day plan → settle day_plan and build the itinerary.
+      if (chipId === "skip-day-plan") {
+        engine.selectChip(chipId, label);
+        awaitingPlanAnnounceRef.current = true;
+        void engine.prepareItinerary();
+        router.push({ pathname: "/generating-plan", params: { locale: engine.locale } });
+        return;
       }
 
       if (chipId === "create-travel-plan") {
@@ -166,7 +319,16 @@ export function TravelChatScreen(): JSX.Element {
       }
       engine.selectChip(chipId, label);
     },
-    [engine, isPreparingPlan, router, toast]
+    [
+      conversationId,
+      engine,
+      isPreparingPlan,
+      isPremium,
+      isPremiumLoading,
+      openPaywall,
+      router,
+      toast,
+    ]
   );
 
   const loadingActivity = (() => {
@@ -179,6 +341,8 @@ export function TravelChatScreen(): JSX.Element {
   const loadingPhrases = loadingActivity ? activityPhrases(loadingActivity, engine.locale) : null;
 
   const orbState = orbStateForActivity(loadingActivity);
+  const composerBusy =
+    loadingActivity !== undefined || isPremiumLoading || isClaimingUsage;
 
   return (
     // SafeAreaView (react-native-safe-area-context) isn't styled by Uniwind's className
@@ -186,7 +350,7 @@ export function TravelChatScreen(): JSX.Element {
     // layout-critical sizing must go through `style`, not `className`.
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       <View className="flex-1 bg-background">
-        <ChatHeader locale={engine.locale} />
+        <ChatHeader locale={engine.locale} onSelectInfluencer={handleSelectInfluencer} />
         {engine.messages.length === 0 ? (
           <EmptyState locale={engine.locale} />
         ) : (
@@ -220,8 +384,10 @@ export function TravelChatScreen(): JSX.Element {
           onLayout={() => setTimeout(() => setIsStickyViewEnabled(true), 100)}
         >
           <Composer
-            onSend={engine.sendText}
-            isSending={loadingActivity !== undefined}
+            onSend={(text) => {
+              void handleSend(text);
+            }}
+            isSending={composerBusy}
             locale={engine.locale}
           />
         </KeyboardStickyView>

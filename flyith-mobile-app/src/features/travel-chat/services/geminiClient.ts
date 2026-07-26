@@ -110,6 +110,9 @@ export async function generateItinerary(brief: TripBrief): Promise<ItineraryDay[
   if (brief.planningMode === "youtube" && brief.youtubeAnalysis) {
     return generateYouTubeItinerary(brief);
   }
+  if (brief.planningMode === "influencer" && brief.influencerSource) {
+    return generateInfluencerItinerary(brief);
+  }
 
   const dayCount =
     brief.startDate && brief.endDate
@@ -271,6 +274,76 @@ Return a JSON array, one object per day, with:
 
   const text: string | undefined = json?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini returned no YouTube itinerary");
+  return parseItineraryDays(JSON.parse(text));
+}
+
+async function generateInfluencerItinerary(brief: TripBrief): Promise<ItineraryDay[]> {
+  const source = brief.influencerSource!;
+  const dayCount =
+    brief.startDate && brief.endDate
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(brief.endDate).getTime() - new Date(brief.startDate).getTime()) / 86_400_000
+          ) + 1
+        )
+      : Math.max(1, source.route.length * 2);
+
+  const placeLines = source.route
+    .flatMap((stop, stopIndex) =>
+      stop.places.map((place, placeIndex) => {
+        const bits = [
+          `${stopIndex + 1}.${placeIndex + 1}. ${place}`,
+          `city=${stop.city}`,
+          stop.notes ? `notes=${stop.notes}` : null,
+        ].filter(Boolean);
+        return bits.join(" | ");
+      })
+    )
+    .join("\n");
+
+  const knownNames = [
+    ...(brief.shownAttractionNames ?? []),
+    ...source.route.flatMap((stop) => stop.places),
+  ]
+    .filter(Boolean)
+    .slice(0, 30)
+    .join(", ");
+
+  const prompt = `Create a ${dayCount}-day itinerary for ${brief.destination ?? source.destinationCity} \
+(${brief.startDate ?? "TBD"} → ${brief.endDate ?? "TBD"}) based PRIMARILY on this travel influencer's route.
+
+Creator: ${source.name} (${source.handle}) — ${source.niche}
+Creator context: ${source.context}
+Highlight: ${source.highlight}
+Flight: ${brief.chosenFlight ? `${brief.chosenFlight.airline} $${brief.chosenFlight.priceUSD}` : "TBD"}.
+
+CREATOR ROUTE STOPS IN ORDER (primary source — prefer these exact place names, keep creator order):
+${placeLines || "(no places listed)"}
+
+Resolved place names available in chat: ${knownNames || "(none)"}
+
+Rules:
+- Do NOT invent places that are not in the creator route list above.
+- You may only add minimal transit/rest/meal filler WITHOUT new placeName values when needed between stops.
+- Spread stops across the days following the route order and any stop notes.
+- Write titles/summaries in the same language as the creator context (or the traveler's chat language).
+
+Return a JSON array, one object per day, with:
+- dayNumber, optional date (YYYY-MM-DD), title, optional summary, optional estimatedDayCostUSD
+- activities: 3-5 objects each with optional time ("09:30"), title, kind \
+(food|sight|experience|transit|rest|shopping|event), optional placeName, optional note, optional estimatedCostUSD`;
+
+  const json = await callTextModel({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: GEMINI_ITINERARY_SCHEMA,
+    },
+  });
+
+  const text: string | undefined = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini returned no influencer itinerary");
   return parseItineraryDays(JSON.parse(text));
 }
 

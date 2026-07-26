@@ -1,6 +1,7 @@
 import type { Session, User } from "@supabase/supabase-js";
 
 import { supabase } from "@/lib/supabase";
+import { logOutPurchases } from "@/features/subscription/purchases";
 
 export interface EmailSignUpInput {
   email: string;
@@ -42,6 +43,11 @@ export async function signInWithEmail({
 }
 
 export async function signOut(): Promise<void> {
+  try {
+    await logOutPurchases();
+  } catch {
+    // Still clear the Supabase session even if RevenueCat logout fails.
+  }
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }

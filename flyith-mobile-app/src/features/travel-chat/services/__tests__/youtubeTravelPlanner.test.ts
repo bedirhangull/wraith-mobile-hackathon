@@ -17,6 +17,7 @@ import type {
 } from "../../types";
 import { activityPhrases } from "../../utils/activityLabels";
 import { detectReplyLocale } from "../../utils/fallbackCopy";
+import { chipsForNextTopic, missingYouTubeEssentials } from "../../utils/nextTopicTurn";
 import { mapBookingOptions } from "../mappers";
 import { extractYouTubeVideoId, isYouTubeUrl, youtubeWatchUrl } from "../../utils/youtubeUrl";
 import { parseYouTubeTravelAnalysis } from "../../prompts/youtubeAnalysisSchema";
@@ -155,6 +156,79 @@ describe("YouTube brief helpers + readiness", () => {
       chosenFlight: sampleFlight,
     };
     assert.equal(isReadyForReview(normal), false);
+  });
+});
+
+describe("YouTube chipsForNextTopic", () => {
+  const youtubeBase: TripBrief = {
+    status: "planning",
+    planningMode: "youtube",
+    destination: "Lisbon",
+    youtubeAnalysis: sampleAnalysis,
+    youtubeSource: sampleSource,
+    travelClass: 1,
+    maxStops: 1,
+    carryOnBags: 1,
+    children: 0,
+    tripLengthDays: 3,
+    skippedTopics: [...YOUTUBE_SKIP_TOPIC_IDS],
+    restaurantsShown: true,
+    attractionsShown: true,
+    dayPlanShown: true,
+  };
+
+  it("asks dates when only tripLengthDays is set (no start/end)", () => {
+    const withOrigin: TripBrief = {
+      ...youtubeBase,
+      originAirportCode: "IST",
+    };
+    assert.deepEqual(missingYouTubeEssentials(withOrigin), ["dates", "travelers"]);
+    const next = chipsForNextTopic(withOrigin, "tr");
+    assert.equal(next.topicId, "dates");
+    assert.ok(next.chips.some((chip) => chip.id.startsWith("days-")));
+    assert.equal(
+      next.chips.some((chip) => chip.id === "create-travel-plan"),
+      false
+    );
+  });
+
+  it("never emits create-travel-plan in YouTube mode", () => {
+    const ready: TripBrief = {
+      ...youtubeBase,
+      originAirportCode: "IST",
+      startDate: "2026-08-01",
+      endDate: "2026-08-04",
+      adults: 1,
+      travelers: 1,
+      companionType: "solo",
+      chosenFlight: sampleFlight,
+    };
+    const next = chipsForNextTopic(ready, "tr");
+    assert.equal(
+      next.chips.some((chip) => chip.id === "create-travel-plan"),
+      false
+    );
+    assert.equal(next.chips.length, 1);
+    assert.equal(next.chips[0]?.id, "review-plan");
+  });
+
+  it("returns empty chips while waiting on flight (no dead review button)", () => {
+    const awaitingFlight: TripBrief = {
+      ...youtubeBase,
+      originAirportCode: "IST",
+      startDate: "2026-08-01",
+      endDate: "2026-08-04",
+      adults: 1,
+      travelers: 1,
+      companionType: "solo",
+    };
+    assert.deepEqual(missingYouTubeEssentials(awaitingFlight), []);
+    const next = chipsForNextTopic(awaitingFlight, "en");
+    assert.equal(next.chips.length, 0);
+    assert.equal(
+      next.chips.some((chip) => chip.id === "create-travel-plan"),
+      false
+    );
   });
 });
 

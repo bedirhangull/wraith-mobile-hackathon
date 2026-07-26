@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "test:unit": "EXPO_PUBLIC_GEMINI_API_KEY=${EXPO_PUBLIC_GEMINI_API_KEY:-test} EXPO_PUBLIC_SERPAPI_API_KEY=${EXPO_PUBLIC_SERPAPI_API_KEY:-test} npx --yes tsx --test src/features/travel-chat/services/__tests__/tripMapReminders.test.ts src/features/travel-chat/services/__tests__/youtubeTravelPlanner.test.ts",
+    "test:unit": "EXPO_PUBLIC_GEMINI_API_KEY=${EXPO_PUBLIC_GEMINI_API_KEY:-test} EXPO_PUBLIC_SERPAPI_API_KEY=${EXPO_PUBLIC_SERPAPI_API_KEY:-test} EXPO_PUBLIC_SUPABASE_URL=${EXPO_PUBLIC_SUPABASE_URL:-http://localhost:54321} EXPO_PUBLIC_SUPABASE_ANON_KEY=${EXPO_PUBLIC_SUPABASE_ANON_KEY:-test} npx --yes tsx --test src/features/travel-chat/services/__tests__/tripMapReminders.test.ts src/features/travel-chat/services/__tests__/youtubeTravelPlanner.test.ts src/features/travel-chat/services/__tests__/influencerTravelPlanner.test.ts src/features/travel-chat/services/__tests__/premiumChatGate.test.ts src/features/subscription/__tests__/mockPremiumStore.test.ts",
     "postinstall": "patch-package"
   },
   "dependencies": {
@@ -47,6 +47,7 @@
     "react-native-gesture-handler": "~2.32.0",
     "react-native-keyboard-controller": "^1.22.2",
     "react-native-maps": "1.27.2",
+    "react-native-purchases": "^10.4.4",
     "react-native-reanimated": "~4.5.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.25.2",

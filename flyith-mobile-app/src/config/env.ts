@@ -21,4 +21,11 @@ export const env = {
   // Not required — Google Sign-In is configured manually via Google Cloud Console
   // and stays disabled client-side until this is set.
   googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "",
+  // iOS OAuth client ID (CLIENT_ID from GoogleService-Info.plist). Optional on Android.
+  googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "",
+  // Public RevenueCat iOS SDK key (appl_…). Required for paywalls on iOS.
+  revenueCatIosKey: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? "",
+  // Set to "true" to bypass RevenueCat entirely and use a device-local mock subscription.
+  // Never set in production builds.
+  mockPremium: process.env.EXPO_PUBLIC_MOCK_PREMIUM === "true",
 };

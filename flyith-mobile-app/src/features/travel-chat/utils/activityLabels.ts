@@ -63,6 +63,18 @@ const PHRASES: Record<ActivityKind, Record<Locale, string[]>> = {
       "Extracting the route",
     ],
   },
+  influencer: {
+    tr: [
+      "Influencer rotasını yüklüyorum",
+      "Mekanları eşleştiriyorum",
+      "Rotayı çıkarıyorum",
+    ],
+    en: [
+      "Loading the creator route",
+      "Matching places",
+      "Extracting the route",
+    ],
+  },
 };
 
 export function activityPhrases(

@@ -82,6 +82,12 @@ function describeMessage(message: ChatMessage): string {
       return `[Assistant showed a YouTube travel video: ${turn.title}${
         turn.channelName ? ` by ${turn.channelName}` : ""
       }${turn.placeNames?.length ? ` — places: ${turn.placeNames.slice(0, 8).join(", ")}` : ""}]`;
+    case "influencer_route":
+      return `[Assistant showed influencer route from ${turn.name}${
+        turn.handle ? ` (${turn.handle})` : ""
+      }${turn.routeCities.length ? ` — cities: ${turn.routeCities.join(" → ")}` : ""}${
+        turn.placeNames.length ? ` — places: ${turn.placeNames.slice(0, 8).join(", ")}` : ""
+      }]`;
     case "system_notice":
       return turn.text;
     case "tool_outcome":

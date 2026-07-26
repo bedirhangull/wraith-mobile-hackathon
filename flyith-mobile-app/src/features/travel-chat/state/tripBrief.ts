@@ -31,6 +31,13 @@ export function isReadyForReview(brief: TripBrief): boolean {
       (brief.youtubeAnalysis?.places.length ?? 0) > 0
     );
   }
+  if (brief.planningMode === "influencer") {
+    return (
+      Boolean(brief.destination) &&
+      Boolean(brief.chosenFlight) &&
+      (brief.influencerSource?.route.some((stop) => stop.places.length > 0) ?? false)
+    );
+  }
   const { covered } = coverage(brief);
   return (
     REQUIRED_BRIEF_FIELDS.every((field) => Boolean(brief[field])) &&
@@ -89,6 +96,7 @@ export function revisionPatch(before: TripBrief, after: TripBrief): Partial<Trip
       destinationCanonicalName: undefined,
       youtubeSource: undefined,
       youtubeAnalysis: undefined,
+      influencerSource: undefined,
       planningMode: undefined,
       skippedTopics: skipped,
     };

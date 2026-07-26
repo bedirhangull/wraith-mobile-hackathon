@@ -195,6 +195,17 @@ export type AssistantTurn =
       placeNames?: string[];
       summary?: string;
     }
+  | {
+      kind: "influencer_route";
+      influencerId: string;
+      name: string;
+      handle: string;
+      niche?: string;
+      context?: string;
+      routeCities: string[];
+      placeNames: string[];
+      summary?: string;
+    }
   | { kind: "system_notice"; text: string }
   // Invisible to the UI — kept in messages so Gemini sees search outcomes on
   // later turns and doesn't re-fire an identical failing search.
@@ -234,6 +245,8 @@ export type TravelStyle = "cultural" | "experience" | "mixed";
 export interface OnboardingContext {
   averageBudget?: number;
   favoriteInfluencer?: string;
+  /** Stable id from `src/data/influencers.ts` — preferred over name for lookups. */
+  favoriteInfluencerId?: string;
   favoriteDestination?: string;
   influencerDestinations?: string[];
   foodPreferences?: string[];
@@ -249,7 +262,7 @@ export type ExploreInterest = "popular" | "outdoors" | "beaches" | "museum" | "h
 export type TripPace = "relaxed" | "balanced" | "packed";
 export type FamousVsHidden = "famous" | "hidden" | "mix";
 
-export type PlanningMode = "chat" | "youtube";
+export type PlanningMode = "chat" | "youtube" | "influencer";
 
 export type YouTubePlaceCategory =
   "food" | "sight" | "experience" | "shopping" | "event" | "hotel" | "other";
@@ -288,6 +301,34 @@ export interface YouTubeSourceMeta {
   channelName?: string;
   publishedDate?: string;
   textSource: "transcript" | "description_chapters" | "metadata_only";
+}
+
+/** One stop on an influencer travel plan — JSON-safe (no ImageSourcePropType). */
+export interface InfluencerRouteStop {
+  city: string;
+  countryCode: string;
+  flag: string;
+  notes?: string;
+  places: string[];
+  startDate?: string;
+  endDate?: string;
+}
+
+/** Serializable influencer snapshot stored on TripBrief (image resolved via id). */
+export interface InfluencerSourceMeta {
+  id: string;
+  name: string;
+  handle: string;
+  niche: string;
+  highlight: string;
+  context: string;
+  originCity: string;
+  originCountryCode: string;
+  originFlag: string;
+  destinationCity: string;
+  destinationCountryCode: string;
+  destinationFlag: string;
+  route: InfluencerRouteStop[];
 }
 
 export interface TripBrief {
@@ -380,10 +421,11 @@ export interface TripBrief {
   restaurantsShown?: boolean;
   attractionsShown?: boolean;
   eventsShown?: boolean;
-  /** Standard chat checklist vs YouTube-transcript-driven planning. */
+  /** Standard chat checklist vs YouTube- / influencer-route-driven planning. */
   planningMode?: PlanningMode;
   youtubeSource?: YouTubeSourceMeta;
   youtubeAnalysis?: YouTubeTravelAnalysis;
+  influencerSource?: InfluencerSourceMeta;
   status: "planning" | "confirmed";
   onboarding?: OnboardingContext;
 }
@@ -415,7 +457,8 @@ export type ActivityKind =
   | "events"
   | "day_plan"
   | "plan"
-  | "youtube";
+  | "youtube"
+  | "influencer";
 
 export interface ModelTurnResponse {
   turn: AssistantTurn;

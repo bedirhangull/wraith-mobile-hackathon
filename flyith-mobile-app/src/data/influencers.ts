@@ -366,3 +366,15 @@ export const influencers: Influencer[] = [
     ],
   },
 ];
+
+const influencersById = new Map(influencers.map((influencer) => [influencer.id, influencer]));
+
+export function influencerById(id: string): Influencer | undefined {
+  return influencersById.get(id);
+}
+
+export function influencerByName(name: string): Influencer | undefined {
+  const needle = name.trim().toLowerCase();
+  if (!needle) return undefined;
+  return influencers.find((influencer) => influencer.name.toLowerCase() === needle);
+}

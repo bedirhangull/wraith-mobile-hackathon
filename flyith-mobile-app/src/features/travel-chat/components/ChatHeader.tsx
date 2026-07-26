@@ -12,18 +12,26 @@ type Locale = "tr" | "en";
 
 interface ChatHeaderProps {
   locale?: Locale;
+  /** Return false to block profile update / plan start (e.g. paywall gate). */
+  onSelectInfluencer?: (influencer: Influencer) => boolean | void;
 }
 
-export function ChatHeader({ locale = "en" }: ChatHeaderProps): JSX.Element {
+export function ChatHeader({
+  locale = "en",
+  onSelectInfluencer,
+}: ChatHeaderProps): JSX.Element {
   const router = useRouter();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedInfluencer, setSelectedInfluencer] = useState<Influencer | null>(null);
   const [mutedColor, foregroundColor] = useThemeColor(["muted", "foreground"]);
 
   const handleSelect = (influencer: Influencer) => {
+    const allowed = onSelectInfluencer?.(influencer);
+    if (allowed === false) return;
     setSelectedInfluencer(influencer);
     setUserProfile({
       favoriteInfluencer: influencer.name,
+      favoriteInfluencerId: influencer.id,
       favoriteDestination: influencer.travelPlan[0]?.city,
       influencerDestinations: influencer.travelPlan.map((plan) => plan.city),
     });

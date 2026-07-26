@@ -15,10 +15,7 @@ export function SocialAuthButtons({ action }: SocialAuthButtonsProps): JSX.Eleme
   const router = useRouter();
   const { toast } = useToast();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [secondaryForeground, defaultForeground] = useThemeColor([
-    "accent-soft-foreground",
-    "default-foreground",
-  ]);
+  const defaultForeground = useThemeColor("default-foreground");
 
   async function handleGooglePress(): Promise<void> {
     setIsGoogleLoading(true);
@@ -43,19 +40,8 @@ export function SocialAuthButtons({ action }: SocialAuthButtonsProps): JSX.Eleme
     }
   }
 
-  function handleApplePress(): void {
-    toast.show({
-      label: "Apple sign-in coming soon",
-      description: "Use email or Google for now.",
-    });
-  }
-
   return (
     <View className="gap-3">
-      <Button onPress={handleApplePress} size="lg" variant="secondary">
-        <Ionicons color={secondaryForeground} name="logo-apple" size={20} />
-        <Button.Label>{action} with Apple</Button.Label>
-      </Button>
       <Button isDisabled={isGoogleLoading} onPress={handleGooglePress} size="lg" variant="outline">
         <Ionicons color={defaultForeground} name="logo-google" size={20} />
         <Button.Label>

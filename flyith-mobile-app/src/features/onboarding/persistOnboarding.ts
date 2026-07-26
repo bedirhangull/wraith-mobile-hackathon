@@ -1,4 +1,4 @@
-import { influencers } from "@/data/influencers";
+import { influencerById, influencers } from "@/data/influencers";
 import type { OnboardingContext } from "@/features/travel-chat/types";
 
 export interface RawOnboardingAnswers {
@@ -13,8 +13,6 @@ export interface MappedOnboarding {
   /** Not part of OnboardingContext — passed separately to the profiles table. */
   fullName?: string;
 }
-
-const influencersById = new Map(influencers.map((influencer) => [influencer.id, influencer]));
 
 /**
  * Onboarding's 8 pages don't map 1:1 onto OnboardingContext's fields (that
@@ -49,12 +47,13 @@ export function mapAnswersToOnboardingContext({
   const selectedInfluencerIds = answers[6];
   if (selectedInfluencerIds?.length) {
     const selected = selectedInfluencerIds
-      .map((id) => influencersById.get(id))
+      .map((id) => influencerById(id))
       .filter((influencer): influencer is NonNullable<typeof influencer> => influencer != null);
 
     const first = selected[0];
     if (first) {
       context.favoriteInfluencer = first.name;
+      context.favoriteInfluencerId = first.id;
       context.favoriteDestination = first.travelPlan[0]?.city;
     }
     const destinations = selected.flatMap((influencer) =>
@@ -67,3 +66,6 @@ export function mapAnswersToOnboardingContext({
 
   return { context, fullName };
 }
+
+/** Re-export so callers that previously imported the local map keep working. */
+export { influencers };

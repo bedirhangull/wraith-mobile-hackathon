@@ -1,6 +1,6 @@
 import type { AssistantTurn, SuggestionChip, TripBrief } from "../types";
 import { nextMissingTopics, TOPICS, type TopicSpec } from "../state/topicChecklist";
-import { isDayPlanSettled } from "../state/tripBrief";
+import { isDayPlanSettled, isReadyForReview } from "../state/tripBrief";
 import { creativeReadyPrompt } from "./chatCopy";
 
 type Locale = "tr" | "en";
@@ -16,11 +16,12 @@ function chipsForTopic(
   switch (topic.id) {
     case "destination": {
       const chips: SuggestionChip[] = [];
+      const influencerId = onboarding?.favoriteInfluencerId;
       const influencerPlace =
         onboarding?.influencerDestinations?.[0] ?? onboarding?.favoriteDestination;
-      if (influencerPlace) {
+      if (influencerPlace && (influencerId || onboarding?.favoriteInfluencer)) {
         chips.push({
-          id: `dest-${influencerPlace.toLowerCase().replace(/\s+/g, "-")}`,
+          id: "influencer-route",
           label: influencerPlace,
           description: onboarding?.favoriteInfluencer
             ? tr
@@ -29,6 +30,14 @@ function chipsForTopic(
             : tr
               ? "Onboarding’den ilham"
               : "From your tastes",
+          emoji: "✈",
+          value: influencerId ?? influencerPlace,
+        });
+      } else if (influencerPlace) {
+        chips.push({
+          id: `dest-${influencerPlace.toLowerCase().replace(/\s+/g, "-")}`,
+          label: influencerPlace,
+          description: tr ? "Onboarding’den ilham" : "From your tastes",
           emoji: "✈",
           value: influencerPlace,
         });
@@ -589,6 +598,41 @@ function genericTopicPrompt(topic: TopicSpec, locale: Locale): string {
 /** Without these there is no trip — they may be re-asked even once asked before. */
 export const ESSENTIAL_TOPIC_IDS = new Set(["destination", "origin", "dates"]);
 
+/** Source-driven modes (YouTube / influencer) only ask these before flight search / review. */
+export const SOURCE_ESSENTIAL_TOPIC_IDS = ["origin", "dates", "travelers"] as const;
+
+/** @deprecated Prefer SOURCE_ESSENTIAL_TOPIC_IDS — kept as an alias for existing imports. */
+export const YOUTUBE_ESSENTIAL_TOPIC_IDS = SOURCE_ESSENTIAL_TOPIC_IDS;
+
+function hasTravelersSettled(brief: TripBrief): boolean {
+  return (
+    brief.adults !== undefined ||
+    brief.travelers !== undefined ||
+    Boolean(brief.companionType)
+  );
+}
+
+function isSourceDrivenMode(brief: TripBrief): boolean {
+  return brief.planningMode === "youtube" || brief.planningMode === "influencer";
+}
+
+/**
+ * Essentials still missing for a source-driven plan (YouTube / influencer)
+ * before flight search / review. Used by chipsForNextTopic and dead-button recovery.
+ */
+export function missingSourceEssentials(brief: TripBrief): string[] {
+  const missing: string[] = [];
+  if (!brief.originAirportCode) missing.push("origin");
+  if (!brief.startDate || !brief.endDate) missing.push("dates");
+  if (!hasTravelersSettled(brief)) missing.push("travelers");
+  return missing;
+}
+
+/** @deprecated Prefer missingSourceEssentials. */
+export function missingYouTubeEssentials(brief: TripBrief): string[] {
+  return missingSourceEssentials(brief);
+}
+
 export interface NextTopicTurn {
   /** undefined once every core topic is answered — time to wrap up, not ask more. */
   topicId?: string;
@@ -614,6 +658,33 @@ export function chipsForNextTopic(
       (topic) => ESSENTIAL_TOPIC_IDS.has(topic.id) && !skip.has(topic.id)
     );
   if (!next) {
+    // Source-driven modes: video/creator supplies the experience; never show
+    // create-travel-plan, and only offer review once flight + places are locked.
+    if (isSourceDrivenMode(brief)) {
+      if (isReadyForReview(brief)) {
+        return {
+          prompt: readyPrompt(locale),
+          chips: [
+            {
+              id: "review-plan",
+              label: locale === "tr" ? "Planı gözden geçir" : "Review my plan",
+              description: locale === "tr" ? "Gün gün program" : "Day-by-day itinerary",
+              emoji: "📋",
+            },
+          ],
+        };
+      }
+      const sourceMissing = missingSourceEssentials(brief).find((id) => !skip.has(id));
+      if (sourceMissing) {
+        const topic = TOPICS.find((entry) => entry.id === sourceMissing);
+        if (topic) {
+          return { topicId: topic.id, ...chipsForTopic(topic, brief, locale) };
+        }
+      }
+      // Waiting on flight selection (or similar) — don't emit a dead review chip.
+      return { prompt: "", chips: [] };
+    }
+
     if (!isDayPlanSettled(brief)) {
       // Already asked once — don't re-emit the same chips (search may still be in flight).
       if (skip.has("day_plan")) {
@@ -726,7 +797,14 @@ export function briefPatchFromChip(
     brief &&
     (chipId === "skip-restaurants" || chipId === "skip-attractions" || chipId === "skip-day-plan")
   ) {
-    return withSkippedTopic(brief, chipId.replace("skip-", ""));
+    // Chip ids use hyphens; topic checklist ids use underscores (day_plan).
+    const topicId =
+      chipId === "skip-day-plan"
+        ? "day_plan"
+        : chipId === "skip-restaurants"
+          ? "restaurants"
+          : "attractions";
+    return withSkippedTopic(brief, topicId);
   }
   if (chipId === "origin-ist") return { originAirportCode: "IST" };
   if (chipId === "origin-ank") return { originAirportCode: "ESB" };

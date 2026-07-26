@@ -21,6 +21,7 @@ import { signOut } from "@/features/auth/api";
 import { fetchProfile } from "@/features/auth/profile-api";
 import { useSession } from "@/features/auth/session";
 import { resetUserProfile } from "@/features/onboarding/profile";
+import { usePremium } from "@/features/subscription/usePremium";
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -68,16 +69,21 @@ export default function ProfileScreen(): JSX.Element {
   const accentColor = useThemeColor("accent");
   const { toast } = useToast();
   const session = useSession();
+  const {
+    deactivateMockPremium,
+    isMockMode,
+    isPremium,
+    isPurchasing,
+  } = usePremium();
+  const [isCancelSubscriptionDialogOpen, setIsCancelSubscriptionDialogOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [planStatus, setPlanStatus] = useState<string>("free");
   const [fullName, setFullName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
     fetchProfile(session.user.id).then((profile) => {
       if (profile) {
-        setPlanStatus(profile.planStatus);
         setFullName(profile.fullName);
       }
     });
@@ -104,6 +110,33 @@ export default function ProfileScreen(): JSX.Element {
     }
   }
 
+  async function handleCancelMockSubscription(): Promise<void> {
+    const result = await deactivateMockPremium();
+    if (result === "success") {
+      setIsCancelSubscriptionDialogOpen(false);
+      toast.show({
+        variant: "success",
+        label: "Subscription cancelled",
+        description: "You can subscribe again from any Premium paywall.",
+      });
+      return;
+    }
+
+    toast.show({
+      variant: "danger",
+      label: "Couldn't cancel subscription",
+      description: "Please try again.",
+    });
+  }
+
+  function handlePlanPress(): void {
+    if (isMockMode && isPremium) {
+      setIsCancelSubscriptionDialogOpen(true);
+      return;
+    }
+    router.push("/paywall-2");
+  }
+
   return (
     <View className="flex-1 bg-white">
       <ScrollView
@@ -113,8 +146,8 @@ export default function ProfileScreen(): JSX.Element {
       >
         <View className="flex-row items-center justify-between">
           <BackButton onPress={() => router.back()} />
-          <Button onPress={() => router.push("/paywall-2")} size="sm" variant="secondary">
-            {planStatus === "pro" ? "Pro Plan" : "Free Plan"}
+          <Button onPress={handlePlanPress} size="sm" variant="secondary">
+            {isPremium ? "Pro Plan" : "Free Plan"}
           </Button>
         </View>
 
@@ -145,14 +178,9 @@ export default function ProfileScreen(): JSX.Element {
           </Typography>
           <ListGroup>
             <SettingsRow
-              description="Tickets and completed routes"
-              icon="airplane-outline"
-              title="Past Flights"
-            />
-            <Separator className="mx-4" />
-            <SettingsRow
               description="Your previous travel plans"
               icon="map-outline"
+              onPress={() => router.push("/past-trips")}
               title="Past Trips"
             />
           </ListGroup>
@@ -192,6 +220,41 @@ export default function ProfileScreen(): JSX.Element {
           />
         </ListGroup>
       </ScrollView>
+
+      <Dialog
+        isOpen={isCancelSubscriptionDialogOpen}
+        onOpenChange={setIsCancelSubscriptionDialogOpen}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content className="items-center" isSwipeable={false}>
+            <View className="mb-10 w-full items-center gap-2">
+              <Dialog.Title className="text-center">Cancel your Premium plan?</Dialog.Title>
+              <Typography className="text-center" color="muted" type="body-sm">
+                Premium chat, YouTube, and influencer features will be locked again.
+              </Typography>
+            </View>
+            <View className="w-full flex-row justify-center gap-3">
+              <Button
+                className="flex-1"
+                isDisabled={isPurchasing}
+                onPress={() => setIsCancelSubscriptionDialogOpen(false)}
+                variant="secondary"
+              >
+                Keep Premium
+              </Button>
+              <Button
+                className="flex-1"
+                isDisabled={isPurchasing}
+                onPress={() => void handleCancelMockSubscription()}
+                variant="danger"
+              >
+                {isPurchasing ? "Cancelling…" : "Cancel Plan"}
+              </Button>
+            </View>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
 
       <Dialog isOpen={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
         <Dialog.Portal>

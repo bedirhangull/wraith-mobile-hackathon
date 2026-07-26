@@ -41,3 +41,14 @@ export async function upsertOnboardingAnswers(
   );
   if (error) throw error;
 }
+
+export async function updatePlanStatus(
+  userId: string,
+  planStatus: "free" | "pro"
+): Promise<void> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ plan_status: planStatus })
+    .eq("id", userId);
+  if (error) throw error;
+}

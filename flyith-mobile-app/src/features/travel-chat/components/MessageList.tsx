@@ -28,6 +28,7 @@ import { SuggestionChipRow } from "./SuggestionChipRow";
 import { SystemNoticeTurn } from "./SystemNoticeTurn";
 import { TypingIndicator } from "./TypingIndicator";
 import { YouTubeVideoTurn } from "./YouTubeVideoTurn";
+import { InfluencerRouteTurn } from "./InfluencerRouteTurn";
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -195,6 +196,20 @@ export function MessageList({
             title={turn.title}
             thumbnailUrl={turn.thumbnailUrl}
             channelName={turn.channelName}
+            placeNames={turn.placeNames}
+            summary={turn.summary}
+            locale={locale}
+          />
+        );
+      case "influencer_route":
+        return (
+          <InfluencerRouteTurn
+            influencerId={turn.influencerId}
+            name={turn.name}
+            handle={turn.handle}
+            niche={turn.niche}
+            context={turn.context}
+            routeCities={turn.routeCities}
             placeNames={turn.placeNames}
             summary={turn.summary}
             locale={locale}

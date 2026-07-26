@@ -1,11 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { Button, Surface, Switch, Typography, useThemeColor } from "heroui-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Button, Surface, Switch, Typography, useThemeColor, useToast } from "heroui-native";
 import type { JSX } from "react";
 import { useEffect, useState } from "react";
 import { Animated, Easing, Image, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { PaywallLegalFooter } from "@/features/subscription/PaywallLegalFooter";
+import { PaywallOfferError } from "@/features/subscription/PaywallOfferError";
+import { clearPendingPremiumAction } from "@/features/subscription/premiumChatGate";
+import { usePremium } from "@/features/subscription/usePremium";
 
 interface TravelerReview {
   comment: string;
@@ -16,7 +21,7 @@ interface TravelerReview {
 const travelerReviews: TravelerReview[] = [
   {
     comment:
-      "Flyith turned a vague weekend idea into a route that felt completely made for me.",
+      "Flyaith turned a vague weekend idea into a route that felt completely made for me.",
     date: "2 days ago",
     name: "Maya K.",
   },
@@ -42,12 +47,36 @@ const travelerAvatars = [
 
 export default function PaywallThreeScreen(): JSX.Element {
   const router = useRouter();
+  const { returnConversationId } = useLocalSearchParams<{ returnConversationId?: string }>();
+  const returnChatId =
+    typeof returnConversationId === "string" && returnConversationId.length > 0
+      ? returnConversationId
+      : undefined;
   const insets = useSafeAreaInsets();
+  const { toast } = useToast();
   const [foregroundColor, accentColor] = useThemeColor(["foreground", "accent"]);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [isReminderEnabled, setIsReminderEnabled] = useState(true);
   const [reviewOpacity] = useState(() => new Animated.Value(1));
   const [reviewOffset] = useState(() => new Animated.Value(0));
+  const {
+    packages,
+    purchase,
+    restore,
+    refresh,
+    isPurchasing,
+    isLoading,
+    error,
+    isMockMode,
+    activateMockPremium,
+  } = usePremium();
+  const annual = packages.annual;
+  // In mock mode: no free trial, show demo prices, offers always "available".
+  const hasTrial = isMockMode ? false : Boolean(annual?.product.introPrice);
+  const priceLabel = isMockMode ? "$29.99" : annual?.product.priceString;
+  const isBusy = isPurchasing || isLoading;
+  const offersUnavailable = isMockMode ? false : (Boolean(error) || (!isLoading && !annual));
+  const buttonDisabled = isMockMode ? isPurchasing : (isBusy || offersUnavailable);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -89,8 +118,73 @@ export default function PaywallThreeScreen(): JSX.Element {
   }, [reviewOffset, reviewOpacity]);
 
   const currentReview = travelerReviews[reviewIndex];
-  const closePaywall = (): void => router.back();
-  const continueToProfile = (): void => router.replace("/profile");
+
+  const leaveAfterSuccess = (): void => {
+    if (returnChatId) {
+      router.replace(`/chat?id=${returnChatId}`);
+      return;
+    }
+    router.replace("/profile");
+  };
+
+  const closePaywall = (): void => {
+    clearPendingPremiumAction();
+    if (returnChatId) {
+      router.replace(`/chat?id=${returnChatId}`);
+      return;
+    }
+    router.back();
+  };
+
+  async function handlePurchase(): Promise<void> {
+    if (isMockMode) {
+      const result = await activateMockPremium();
+      if (result === "success") {
+        toast.show({ label: "Welcome to Flyaith Premium" });
+        leaveAfterSuccess();
+      }
+      return;
+    }
+
+    if (!annual) {
+      toast.show({
+        variant: "danger",
+        label: "Offer unavailable",
+        description: error ?? "Subscription packages haven't loaded yet. Try again in a moment.",
+      });
+      return;
+    }
+
+    const result = await purchase(annual);
+    if (result === "success") {
+      toast.show({ label: "Welcome to Flyaith Premium" });
+      leaveAfterSuccess();
+      return;
+    }
+    if (result === "error" || result === "unavailable") {
+      toast.show({
+        variant: "danger",
+        label: "Purchase failed",
+        description: "Please try again or restore previous purchases.",
+      });
+    }
+  }
+
+  async function handleRestore(): Promise<void> {
+    const result = await restore();
+    if (result === "success") {
+      toast.show({ label: "Purchases restored" });
+      leaveAfterSuccess();
+      return;
+    }
+    if (result !== "cancelled") {
+      toast.show({
+        variant: "danger",
+        label: "Nothing to restore",
+        description: "No active Premium subscription was found for this Apple ID.",
+      });
+    }
+  }
 
   return (
     <View className="flex-1 bg-white">
@@ -232,11 +326,11 @@ export default function PaywallThreeScreen(): JSX.Element {
                 $59.99
               </Typography>
               <Typography type="h2" weight="bold">
-                $29.99 / year
+                {priceLabel ? `${priceLabel} / year` : "Price loading…"}
               </Typography>
             </View>
             <Typography color="muted" type="body-xs">
-              Just $2.50 per month · Cancel anytime
+              Cancel anytime
             </Typography>
           </View>
         </Surface>
@@ -253,7 +347,13 @@ export default function PaywallThreeScreen(): JSX.Element {
           </View>
           <Switch isSelected={isReminderEnabled} onSelectedChange={setIsReminderEnabled} />
         </Surface>
-
+        {!isMockMode && offersUnavailable ? (
+          <PaywallOfferError
+            isBusy={isBusy}
+            message={error ?? "Subscription plans aren't available yet. Please try again in a moment."}
+            onRetry={() => void refresh()}
+          />
+        ) : null}
       </ScrollView>
 
       <Surface
@@ -261,13 +361,19 @@ export default function PaywallThreeScreen(): JSX.Element {
         style={{ paddingBottom: insets.bottom + 10 }}
         variant="default"
       >
-        <Button onPress={continueToProfile} size="lg">
-          <Button.Label className="font-bold">Start My Free Trial</Button.Label>
+        <Button isDisabled={buttonDisabled} onPress={() => void handlePurchase()} size="lg">
+          <Button.Label className="font-bold">
+            {isPurchasing ? "Purchasing…" : hasTrial ? "Start My Free Trial" : "Unlock Premium"}
+          </Button.Label>
         </Button>
 
         <Typography className="text-center" color="muted" type="body-xs">
-          7 days free, then $29.99/year
+          {hasTrial
+            ? `7 days free, then ${priceLabel ?? "—"}/year`
+            : `${priceLabel ?? "—"}/year · Cancel anytime`}
         </Typography>
+
+        <PaywallLegalFooter isBusy={isBusy} onRestore={() => void handleRestore()} />
       </Surface>
     </View>
   );

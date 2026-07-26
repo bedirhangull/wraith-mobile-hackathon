@@ -227,7 +227,13 @@ export function gateChipsToBriefPhase(
     return fallbackChoiceChips(brief, locale, askedTopicIds);
   }
 
-  if (normalized.length >= 2) return normalized;
+  // YouTube / influencer chats never offer the create-travel-plan animation path.
+  const phaseFiltered =
+    brief.planningMode === "youtube" || brief.planningMode === "influencer"
+      ? normalized.filter((chip) => chip.id !== "create-travel-plan")
+      : normalized;
+
+  if (phaseFiltered.length >= 2) return phaseFiltered;
   return fallbackChoiceChips(brief, locale, askedTopicIds);
 }
 

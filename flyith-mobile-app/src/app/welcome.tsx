@@ -42,10 +42,7 @@ const travelStops = [
   { left: 47, size: 68, source: travelerMemojis[8], threshold: 0.46, top: 28 },
   { left: 50, size: 62, source: travelObjects[9], threshold: 0.51, top: 258 },
   { left: 62, size: 70, source: travelObjects[6], threshold: 0.58, top: 99 },
-  { left: 63, size: 56, source: travelObjects[1], threshold: 0.63, top: 188 },
-  { left: 73, size: 60, source: travelObjects[14], threshold: 0.65, top: 240 },
-  { left: 77, size: 64, source: travelObjects[16], threshold: 0.69, top: 24 },
-  { left: 83, size: 66, source: travelerMemojis[22], threshold: 0.78, top: 137 },
+
 ] as const;
 
 interface TravelIconProps {

@@ -1,20 +1,21 @@
 {
   "expo": {
-    "name": "flyith-mobile-app",
+    "name": "Flyaith",
     "slug": "flyith-mobile-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "heroui-native-app",
+    "icon": "./assets/images/icon-1024.png",
+    "scheme": "flyaith",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.flyithmobileapp"
+      "bundleIdentifier": "com.anonymous.flyithmobileapp",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/icon-1024.png",
+        "backgroundColor": "#2F6BFF"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.flyithmobileapp"
@@ -50,7 +51,7 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.REPLACE_WITH_IOS_OAUTH_CLIENT_ID"
+          "iosUrlScheme": "com.googleusercontent.apps.572601357294-u4m877at73q5ur9n1m0tp92bpvg6fuq3"
         }
       ],
       "./plugins/withModularHeaders.js"

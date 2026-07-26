@@ -49,6 +49,22 @@ export function buildSystemPrompt(
       ? missing.map((topic) => formatTopicForPrompt(topic, onboarding)).join("\n")
       : "(all tracked topics covered)";
 
+  const influencerBlock =
+    brief.planningMode === "influencer" && brief.influencerSource
+      ? `
+INFLUENCER ROUTE MODE — the traveler chose ${brief.influencerSource.name}'s curated route. \
+Treat this as the primary source of places and vibe. Do NOT invent unrelated attractions. \
+Origin/dates/travelers are still missing and should be asked next; hotel/day-plan/experience prefs are already covered.
+Creator: ${brief.influencerSource.name} (${brief.influencerSource.handle}) — ${brief.influencerSource.niche}
+Context: ${brief.influencerSource.context}
+Route cities: ${brief.influencerSource.route.map((stop) => stop.city).join(" → ")}
+Places (in order): ${brief.influencerSource.route
+          .flatMap((stop) => stop.places)
+          .slice(0, 16)
+          .join(", ")}
+`
+      : "";
+
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
   const todayReadable = now.toLocaleDateString("en-US", {
@@ -198,7 +214,7 @@ SEARCH OUTCOMES — after a search the app may send "[SEARCH … → NO RESULTS/
 
 ONBOARDING CONTEXT (use what's listed to personalize — challenge/confirm, don't re-ask identically):
 ${onboardingLines}
-
+${influencerBlock}
 TRIP BRIEF SO FAR:
 ${briefLines || "(nothing yet)"}
 
