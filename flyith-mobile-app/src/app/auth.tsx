@@ -1,16 +1,36 @@
 import { useRouter } from "expo-router";
-import { Button, Input, Typography } from "heroui-native";
+import { Button, Input, Typography, useToast } from "heroui-native";
 import type { JSX } from "react";
 import { useState } from "react";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackButton } from "@/components/back-button";
+import { signInWithEmail } from "@/features/auth/api";
 
 export default function AuthScreen(): JSX.Element {
   const router = useRouter();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
-  const hasEmail = email.trim().length > 0;
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !isSubmitting;
+
+  async function handleContinue(): Promise<void> {
+    setIsSubmitting(true);
+    try {
+      await signInWithEmail({ email: email.trim(), password });
+      router.replace("/onboarding");
+    } catch (error) {
+      toast.show({
+        variant: "danger",
+        label: "Sign in failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <SafeAreaView style={{ backgroundColor: "#FFFFFF", flex: 1 }}>
@@ -41,14 +61,33 @@ export default function AuthScreen(): JSX.Element {
                   keyboardType="email-address"
                   onChangeText={setEmail}
                   placeholder="you@example.com"
-                  returnKeyType="done"
+                  returnKeyType="next"
                   value={email}
                 />
               </View>
             </View>
 
-            <Button isDisabled={!hasEmail} onPress={() => router.push("/onboarding")} size="lg">
-              Continue with email
+            <View className="gap-2">
+              <Typography type="body-sm" weight="medium">
+                Password
+              </Typography>
+              <View className="h-12">
+                <Input
+                  autoCapitalize="none"
+                  autoComplete="password"
+                  autoCorrect={false}
+                  className="flex-1"
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  returnKeyType="done"
+                  secureTextEntry
+                  value={password}
+                />
+              </View>
+            </View>
+
+            <Button isDisabled={!canSubmit} onPress={handleContinue} size="lg">
+              {isSubmitting ? "Signing in…" : "Continue with email"}
             </Button>
           </View>
 

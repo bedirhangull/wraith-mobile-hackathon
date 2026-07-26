@@ -9,11 +9,25 @@ import {
   Surface,
   Typography,
   useThemeColor,
+  useToast,
 } from "heroui-native";
 import type { ComponentProps, JSX } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { BackButton } from "@/components/back-button";
+import { signOut } from "@/features/auth/api";
+import { fetchProfile } from "@/features/auth/profile-api";
+import { useSession } from "@/features/auth/session";
+import { resetUserProfile } from "@/features/onboarding/profile";
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
 
 interface SettingsRowProps {
   description?: string;
@@ -52,7 +66,43 @@ export default function ProfileScreen(): JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const accentColor = useThemeColor("accent");
+  const { toast } = useToast();
+  const session = useSession();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [planStatus, setPlanStatus] = useState<string>("free");
+  const [fullName, setFullName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    fetchProfile(session.user.id).then((profile) => {
+      if (profile) {
+        setPlanStatus(profile.planStatus);
+        setFullName(profile.fullName);
+      }
+    });
+  }, [session]);
+
+  const emailFallback = session?.user.email?.split("@")[0] ?? "Traveler";
+  const displayName = fullName?.trim() || emailFallback;
+
+  async function handleLogout(): Promise<void> {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+      resetUserProfile();
+      setIsLogoutDialogOpen(false);
+      router.replace("/welcome");
+    } catch (error) {
+      toast.show({
+        variant: "danger",
+        label: "Couldn't log out",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
 
   return (
     <View className="flex-1 bg-white">
@@ -61,12 +111,17 @@ export default function ProfileScreen(): JSX.Element {
         contentContainerStyle={{ paddingTop: insets.top + 16 }}
         showsVerticalScrollIndicator={false}
       >
-        <Typography type="h1">Profile</Typography>
+        <View className="flex-row items-center justify-between">
+          <BackButton onPress={() => router.back()} />
+          <Button onPress={() => router.push("/paywall-2")} size="sm" variant="secondary">
+            {planStatus === "pro" ? "Pro Plan" : "Free Plan"}
+          </Button>
+        </View>
 
         <View className="items-center gap-3">
           <Pressable accessibilityLabel="Change profile photo" accessibilityRole="button">
             <Avatar color="accent" size="lg" variant="soft">
-              <Avatar.Fallback>ÖB</Avatar.Fallback>
+              <Avatar.Fallback>{getInitials(displayName)}</Avatar.Fallback>
             </Avatar>
             <Surface
               className="absolute -bottom-1 -right-1 h-7 w-7 items-center justify-center rounded-full p-0"
@@ -77,7 +132,7 @@ export default function ProfileScreen(): JSX.Element {
           </Pressable>
 
           <View className="items-center gap-1">
-            <Typography type="h3">Öykü Bıçkıcı</Typography>
+            <Typography type="h3">{displayName}</Typography>
             <Typography color="muted" type="body-sm">
               Personal travel profile
             </Typography>
@@ -136,18 +191,6 @@ export default function ProfileScreen(): JSX.Element {
             title="Log Out"
           />
         </ListGroup>
-
-        <View className="gap-3">
-          <Typography className="px-1" color="muted" type="body-xs">
-            PAYWALL TESTS
-          </Typography>
-          <Button onPress={() => router.push("/paywall-2")} variant="secondary">
-            Paywall 2
-          </Button>
-          <Button onPress={() => router.push("/paywall-3")} variant="secondary">
-            Paywall 3
-          </Button>
-        </View>
       </ScrollView>
 
       <Dialog isOpen={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
@@ -167,10 +210,11 @@ export default function ProfileScreen(): JSX.Element {
               </Button>
               <Button
                 className="flex-1"
-                onPress={() => router.replace("/welcome")}
+                isDisabled={isLoggingOut}
+                onPress={handleLogout}
                 variant="danger"
               >
-                Log Out
+                {isLoggingOut ? "Logging out…" : "Log Out"}
               </Button>
             </View>
           </Dialog.Content>

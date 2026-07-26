@@ -28,6 +28,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { influencers, type Influencer } from "../data/influencers";
 import { travelObjects } from "../data/travel-objects";
 import { travelerMemojis } from "../data/traveler-memojis";
+import { getSession } from "../features/auth/session";
+import { upsertOnboardingAnswers } from "../features/auth/profile-api";
+import { setUserProfile } from "../features/onboarding/profile";
+import { mapAnswersToOnboardingContext } from "../features/onboarding/persistOnboarding";
 
 interface OnboardingOption {
   description: string;
@@ -285,6 +289,20 @@ function PageVisual({ index }: PageVisualProps): JSX.Element | null {
     <Surface
       className="h-36 flex-row items-center justify-center overflow-hidden rounded-3xl bg-white p-0"
       variant="default"
+      style={
+        index === 0
+          ? {
+              shadowColor: "transparent",
+              shadowOpacity: 0,
+              shadowRadius: 0,
+              elevation: 0,
+              // uniwind compiles Tailwind's box-shadow (from Surface's
+              // surface__root class) into this RN style key — the legacy
+              // shadow*/elevation props above don't touch it.
+              boxShadow: "none",
+            }
+          : undefined
+      }
     >
       {visuals.map((source, visualIndex) => (
         <View
@@ -862,7 +880,27 @@ export default function OnboardingScreen(): JSX.Element {
         index={visibleIndex}
         inputAnswers={inputAnswers}
         onBack={() => startTransition(visibleIndex - 1, true)}
-        onFinish={() => router.replace("/paywall")}
+        onFinish={() => {
+          const { context, fullName } = mapAnswersToOnboardingContext({
+            answers,
+            inputAnswers,
+            travelerCounts,
+          });
+          setUserProfile(context);
+
+          const session = getSession();
+          if (session) {
+            void upsertOnboardingAnswers(
+              session.user.id,
+              { answers, inputAnswers, travelerCounts },
+              fullName
+            ).catch((err) => {
+              console.warn("[onboarding] failed to persist to Supabase", err);
+            });
+          }
+
+          router.replace("/paywall");
+        }}
         onInputChange={(value) =>
           setInputAnswers((current) => ({
             ...current,

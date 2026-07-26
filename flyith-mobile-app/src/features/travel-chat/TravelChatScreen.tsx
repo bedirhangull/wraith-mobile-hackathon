@@ -10,6 +10,7 @@ import { useToast } from "heroui-native";
 import { useUserProfile } from "@/features/onboarding/profile";
 import { BookingOptionsSheet } from "./components/BookingOptionsSheet";
 import { CalendarSheet } from "./components/CalendarSheet";
+import { ChatHeader } from "./components/ChatHeader";
 import { Composer } from "./components/Composer";
 import { EmptyState } from "./components/EmptyState";
 import { HotelDetailSheet } from "./components/HotelDetailSheet";
@@ -185,6 +186,7 @@ export function TravelChatScreen(): JSX.Element {
     // layout-critical sizing must go through `style`, not `className`.
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       <View className="flex-1 bg-background">
+        <ChatHeader locale={engine.locale} />
         {engine.messages.length === 0 ? (
           <EmptyState locale={engine.locale} />
         ) : (

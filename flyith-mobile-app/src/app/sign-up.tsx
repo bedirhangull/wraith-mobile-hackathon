@@ -1,17 +1,38 @@
 import { useRouter } from "expo-router";
-import { Button, Input, Typography } from "heroui-native";
+import { Button, Input, Typography, useToast } from "heroui-native";
 import type { JSX } from "react";
 import { useState } from "react";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackButton } from "@/components/back-button";
+import { signUpWithEmail } from "@/features/auth/api";
 
 export default function SignUpScreen(): JSX.Element {
   const router = useRouter();
+  const { toast } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const canCreateAccount = name.trim().length > 0 && email.trim().length > 0;
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const canCreateAccount =
+    name.trim().length > 0 && email.trim().length > 0 && password.length >= 6 && !isSubmitting;
+
+  async function handleCreateAccount(): Promise<void> {
+    setIsSubmitting(true);
+    try {
+      await signUpWithEmail({ email: email.trim(), password, fullName: name.trim() });
+      router.replace("/onboarding");
+    } catch (error) {
+      toast.show({
+        variant: "danger",
+        label: "Couldn't create account",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <SafeAreaView style={{ backgroundColor: "#FFFFFF", flex: 1 }}>
@@ -59,18 +80,33 @@ export default function SignUpScreen(): JSX.Element {
                   keyboardType="email-address"
                   onChangeText={setEmail}
                   placeholder="you@example.com"
-                  returnKeyType="done"
+                  returnKeyType="next"
                   value={email}
                 />
               </View>
             </View>
 
-            <Button
-              isDisabled={!canCreateAccount}
-              onPress={() => router.push("/onboarding")}
-              size="lg"
-            >
-              Create account
+            <View className="gap-2">
+              <Typography type="body-sm" weight="medium">
+                Password
+              </Typography>
+              <View className="h-12">
+                <Input
+                  autoCapitalize="none"
+                  autoComplete="password-new"
+                  autoCorrect={false}
+                  className="flex-1"
+                  onChangeText={setPassword}
+                  placeholder="At least 6 characters"
+                  returnKeyType="done"
+                  secureTextEntry
+                  value={password}
+                />
+              </View>
+            </View>
+
+            <Button isDisabled={!canCreateAccount} onPress={handleCreateAccount} size="lg">
+              {isSubmitting ? "Creating account…" : "Create account"}
             </Button>
           </View>
 

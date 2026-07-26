@@ -211,7 +211,7 @@ export default function PaywallScreen(): JSX.Element {
             ))}
           </View>
           <Typography type="body-sm" weight="medium">
-            Join 12,000+ curious travelers
+            Join 12,000+ travelers planning with their favorite creators
           </Typography>
         </View>
 

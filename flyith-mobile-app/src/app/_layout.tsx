@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import * as Notifications from "expo-notifications";
+import * as SplashScreen from "expo-splash-screen";
 import { HeroUINativeProvider } from "heroui-native";
 import { type JSX, useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -18,17 +19,32 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Keep the native splash up until heavy sync init (ML Kit models, notification
+// channel) is done — index.tsx owns the actual routing decision, this just
+// signals "the JS shell is safe to reveal".
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function RootLayout(): JSX.Element {
   useEffect(() => {
-    // Android ML Kit models (~5.6MB each); no-op on iOS / when native module is missing.
-    void Promise.all([prepareModelSafe("tr"), prepareModelSafe("en")]);
-    if (process.env.EXPO_OS === "android") {
-      void Notifications.setNotificationChannelAsync("trip-reminders", {
-        name: "Gezi hatırlatmaları",
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 150, 250],
-      });
+    let cancelled = false;
+
+    async function bootstrap(): Promise<void> {
+      await Promise.all([prepareModelSafe("tr"), prepareModelSafe("en")]);
+      if (process.env.EXPO_OS === "android" && !cancelled) {
+        await Notifications.setNotificationChannelAsync("trip-reminders", {
+          name: "Gezi hatırlatmaları",
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 150, 250],
+        });
+      }
+      // Splash is hidden by index.tsx once it knows where to route —
+      // hiding it here would reveal index.tsx before that decision is ready.
     }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

@@ -24,9 +24,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/airplane-memoji.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "image": "./assets/images/splash.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#ffffff",
+          "enableFullScreenImage_legacy": true
         }
       ],
       "expo-status-bar",
@@ -44,7 +45,15 @@
             "minSdkVersion": 26
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.REPLACE_WITH_IOS_OAUTH_CLIENT_ID"
+        }
+      ],
+      "./plugins/withModularHeaders.js"
     ],
     "experiments": {
       "typedRoutes": true,
